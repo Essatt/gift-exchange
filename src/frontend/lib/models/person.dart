@@ -1,7 +1,7 @@
 import 'package:hive/hive.dart';
+import 'relationship_type.dart';
 
 part 'person.g.dart';
-import 'relationship_type.dart';
 
 @HiveType(typeId: 3)
 class Person extends HiveObject {

@@ -1,0 +1,428 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:hive/hive.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:intl/intl.dart';
+
+part 'main.dart.g.dart';
+
+// --- Constants & Adapters ---
+
+const String peopleBoxName = 'people';
+const String giftsBoxName = 'gifts';
+
+@HiveType(typeId: 0)
+class Person extends HiveObject {
+  @HiveField(0)
+  String id;
+
+  @HiveField(1)
+  String name;
+
+  @HiveField(2)
+  String relationship;
+
+  Person({
+    required this.id,
+    required this.name,
+    required this.relationship,
+  });
+}
+
+@HiveType(typeId: 1)
+class Gift extends HiveObject {
+  @HiveField(0)
+  String id;
+
+  @HiveField(1)
+  String personId;
+
+  @HiveField(2)
+  bool isGiven; // true = Given to person, false = Received from person
+
+  @HiveField(3)
+  double value;
+
+  @HiveField(4)
+  DateTime date;
+
+  @HiveField(5)
+  String eventType;
+
+  @HiveField(6)
+  String description;
+
+  Gift({
+    required this.id,
+    required this.personId,
+    required this.isGiven,
+    required this.value,
+    required this.date,
+    required this.eventType,
+    required this.description,
+  });
+}
+
+// --- Manual Type Adapters (for standalone compilation without build_runner) ---
+
+class PersonAdapter extends TypeAdapter<Person> {
+  @override
+  final int typeId = 0;
+
+  @override
+  Person read(BinaryReader reader) {
+    return Person(
+      id: reader.readString(),
+      name: reader.readString(),
+      relationship: reader.readString(),
+    );
+  }
+
+  @override
+  void write(BinaryWriter writer, Person obj) {
+    writer.writeString(obj.id);
+    writer.writeString(obj.name);
+    writer.writeString(obj.relationship);
+  }
+}
+
+class GiftAdapter extends TypeAdapter<Gift> {
+  @override
+  final int typeId = 1;
+
+  @override
+  Gift read(BinaryReader reader) {
+    return Gift(
+      id: reader.readString(),
+      personId: reader.readString(),
+      isGiven: reader.readBool(),
+      value: reader.readDouble(),
+      date: DateTime.parse(reader.readString()),
+      eventType: reader.readString(),
+      description: reader.readString(),
+    );
+  }
+
+  @override
+  void write(BinaryWriter writer, Gift obj) {
+    writer.writeString(obj.id);
+    writer.writeString(obj.personId);
+    writer.writeBool(obj.isGiven);
+    writer.writeDouble(obj.value);
+    writer.writeString(obj.date.toIso8601String());
+    writer.writeString(obj.eventType);
+    writer.writeString(obj.description);
+  }
+}
+
+// --- Providers ---
+
+final hiveProvider = Provider<HiveInterface>((ref) => Hive);
+
+final peopleBoxProvider = FutureProvider<Box<Person>>((ref) async {
+  return await Hive.openBox<Person>(peopleBoxName);
+});
+
+final giftsBoxProvider = FutureProvider<Box<Gift>>((ref) async {
+  return await Hive.openBox<Gift>(giftsBoxName);
+});
+
+final peopleListProvider = Provider<Iterable<Person>>((ref) {
+  final boxAsync = ref.watch(peopleBoxProvider);
+  return boxAsync.when(
+    data: (box) => box.values.toList(),
+    loading: () => [],
+    error: (_, __) => [],
+  );
+});
+
+final giftListProvider = Provider<Iterable<Gift>>((ref) {
+  final boxAsync = ref.watch(giftsBoxProvider);
+  return boxAsync.when(
+    data: (box) => box.values.toList(),
+    loading: () => [],
+    error: (_, __) => [],
+  );
+});
+
+final navigationIndexProvider = StateProvider<int>((ref) => 0);
+
+// --- Services ---
+
+class GiftService {
+  static Future<void> addPerson(WidgetRef ref, Person person) async {
+    try {
+      final box = await ref.read(peopleBoxProvider.future);
+      await box.put(person.id, person);
+    } catch (e) {
+      debugPrint('Error adding person: $e');
+      rethrow;
+    }
+  }
+
+  static Future<void> addGift(WidgetRef ref, Gift gift) async {
+    try {
+      final box = await ref.read(giftsBoxProvider.future);
+      await box.put(gift.id, gift);
+    } catch (e) {
+      debugPrint('Error adding gift: $e');
+      rethrow;
+    }
+  }
+
+  static Future<void> deleteGift(WidgetRef ref, String giftId) async {
+    try {
+      final box = await ref.read(giftsBoxProvider.future);
+      await box.delete(giftId);
+    } catch (e) {
+      debugPrint('Error deleting gift: $e');
+    }
+  }
+}
+
+// --- Main Entry Point ---
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  await Hive.initFlutter();
+  Hive.registerAdapter(PersonAdapter());
+  Hive.registerAdapter(GiftAdapter());
+
+  runApp(
+    const ProviderScope(
+      child: GiftExchangeApp(),
+    ),
+  );
+}
+
+class GiftExchangeApp extends StatelessWidget {
+  const GiftExchangeApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Gift Exchange',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
+        useMaterial3: true,
+      ),
+      home: const MainNavigationWrapper(),
+    );
+  }
+}
+
+class MainNavigationWrapper extends ConsumerWidget {
+  const MainNavigationWrapper({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final index = ref.watch(navigationIndexProvider);
+
+    return Scaffold(
+      body: IndexedStack(
+        index: index,
+        children: const [
+          PeoplePage(),
+          GiftExchangePage(),
+          AnalysisPage(),
+        ],
+      ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: index,
+        onDestinationSelected: (i) => ref.read(navigationIndexProvider.notifier).state = i,
+        destinations: const [
+          NavigationDestination(icon: Icon(Icons.people), label: 'People'),
+          NavigationDestination(icon: Icon(Icons.card_giftcard), label: 'Exchange'),
+          NavigationDestination(icon: Icon(Icons.bar_chart), label: 'Analysis'),
+        ],
+      ),
+    );
+  }
+}
+
+// --- Pages ---
+
+class PeoplePage extends ConsumerWidget {
+  const PeoplePage({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final people = ref.watch(peopleListProvider);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('People'),
+        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+      ),
+      body: people.isEmpty
+          ? const Center(child: Text('No people added yet.'))
+          : ListView.builder(
+              itemCount: people.length,
+              itemBuilder: (context, index) {
+                final person = people.elementAt(index);
+                return ListTile(
+                  title: Text(person.name),
+                  subtitle: Text(person.relationship),
+                  leading: CircleAvatar(child: Text(person.name[0])),
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => PersonDetailPage(person: person),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => showDialog(context: context, builder: (_) => const AddPersonDialog()),
+        child: const Icon(Icons.add),
+      ),
+    );
+  }
+}
+
+class PersonDetailPage extends ConsumerWidget {
+  final Person person;
+  const PersonDetailPage({super.key, required this.person});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final allGifts = ref.watch(giftListProvider);
+    final personGifts = allGifts.where((g) => g.personId == person.id).toList()
+      ..sort((a, b) => b.date.compareTo(a.date));
+
+    final totalGiven = personGifts.where((g) => g.isGiven).fold<double>(0, (sum, g) => sum + g.value);
+    final totalReceived = personGifts.where((g) => !g.isGiven).fold<double>(0, (sum, g) => sum + g.value);
+    final netBalance = totalReceived - totalGiven;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(person.name),
+        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+      ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Net Balance', style: Theme.of(context).textTheme.labelMedium),
+                    Text(
+                      '\$${netBalance.toStringAsFixed(2)}',
+                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                            color: netBalance >= 0 ? Colors.green : Colors.red,
+                          ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        _StatItem('Given', '\$$totalGiven', Colors.red),
+                        _StatItem('Received', '\$$totalReceived', Colors.green),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Expanded(
+            child: personGifts.isEmpty
+                ? const Center(child: Text('No history yet.'))
+                : ListView.builder(
+                    itemCount: personGifts.length,
+                    itemBuilder: (context, index) {
+                      final gift = personGifts[index];
+                      return GiftTile(gift: gift);
+                    },
+                  ),
+          ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => showDialog(
+          context: context,
+          builder: (_) => AddGiftDialog(personId: person.id),
+        ),
+        child: const Icon(Icons.add),
+      ),
+    );
+  }
+}
+
+class _StatItem extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+
+  const _StatItem(this.label, this.value, this.color);
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text(label, style: Theme.of(context).textTheme.bodySmall),
+        Text(value, style: TextStyle(color: color, fontWeight: FontWeight.bold)),
+      ],
+    );
+  }
+}
+
+class GiftExchangePage extends ConsumerWidget {
+  const GiftExchangePage({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final allGifts = ref.watch(giftListProvider);
+    final people = ref.watch(peopleListProvider);
+
+    final sortedGifts = allGifts.toList()..sort((a, b) => b.date.compareTo(a.date));
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Exchanges'),
+        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+      ),
+      body: sortedGifts.isEmpty
+          ? const Center(child: Text('No exchanges recorded.'))
+          : ListView.builder(
+              itemCount: sortedGifts.length,
+              itemBuilder: (context, index) {
+                final gift = sortedGifts[index];
+                final person = people.firstWhere(
+                  (p) => p.id == gift.personId,
+                  orElse: () => Person(id: '', name: 'Unknown', relationship: ''),
+                );
+                return ListTile(
+                  leading: Icon(
+                    gift.isGiven ? Icons.call_made : Icons.call_received,
+                    color: gift.isGiven ? Colors.red : Colors.green,
+                  ),
+                  title: Text(gift.eventType),
+                  subtitle: Text('${person.name} - \$${gift.value.toStringAsFixed(2)}'),
+                  trailing: Text(DateFormat.yMMMd().format(gift.date)),
+                );
+              },
+            ),
+    );
+  }
+}
+
+class AnalysisPage extends ConsumerWidget {
+  const AnalysisPage({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final gifts = ref.watch(giftListProvider);
+    final people = ref.watch(peopleListProvider);
+
+    final totalSpent = gifts.where((g) => g.isGiven).fold<double>(0, (sum, g) => sum + g.value);
+    final totalReceived = gifts.where((g) => !g.isGiven).fold<double>(0, (sum, g) => sum + g.value);
+    final mostGiftedPerson = _calculateMostGift

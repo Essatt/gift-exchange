@@ -1,7 +1,7 @@
 import 'package:hive/hive.dart';
+import 'gift_type.dart';
 
 part 'gift.g.dart';
-import 'gift_type.dart';
 
 @HiveType(typeId: 4)
 class Gift extends HiveObject {

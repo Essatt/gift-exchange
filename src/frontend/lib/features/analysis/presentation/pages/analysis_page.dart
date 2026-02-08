@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import '../../../models/gift.dart';
-import '../../../models/person.dart';
-import '../../../providers/gift_providers.dart';
+import '../../../../models/gift.dart';
+import '../../../../models/gift_type.dart';
+import '../../../../models/person.dart';
+import '../../../../services/gift_service.dart';
 
 class AnalysisPage extends ConsumerWidget {
   const AnalysisPage({super.key});
@@ -12,6 +13,7 @@ class AnalysisPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final giftsAsync = ref.watch(giftsProvider);
     final peopleAsync = ref.watch(peopleProvider);
+    final service = ref.watch(giftServiceProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -42,7 +44,7 @@ class AnalysisPage extends ConsumerWidget {
               children: [
                 _buildOverallStats(context, totalSpent, totalReceived),
                 const SizedBox(height: 16),
-                _buildTimeframeToggle(),
+                const _TimeframeToggle(),
                 const SizedBox(height: 16),
                 _buildTopSpenders(spendingByPerson),
               ],
@@ -164,15 +166,8 @@ class _OverallStatItem extends StatelessWidget {
   }
 }
 
-class _TimeframeToggle extends StatefulWidget {
+class _TimeframeToggle extends StatelessWidget {
   const _TimeframeToggle({super.key});
-
-  @override
-  State<_TimeframeToggle> createState() => _TimeframeToggleState();
-}
-
-class _TimeframeToggleState extends State<_TimeframeToggle> {
-  String _selectedTimeframe = 'overall';
 
   @override
   Widget build(BuildContext context) {
@@ -194,11 +189,8 @@ class _TimeframeToggleState extends State<_TimeframeToggle> {
           icon: Icon(Icons.calendar_month),
         ),
       ],
-      selected: {_selectedTimeframe},
+      selected: const {'overall'},
       onSelectionChanged: (Set<String> newSelection) {
-        setState(() {
-          _selectedTimeframe = newSelection.first;
-        });
       },
     );
   }

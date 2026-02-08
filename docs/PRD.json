@@ -1,0 +1,140 @@
+{
+  "prd": {
+    "project_name": "Gift Exchange",
+    "version": "1.0",
+    "executive_summary": "Gift Exchange is a cross-platform mobile application designed to help users track gifts given and received. It solves the problem of forgetting gift history, overspending during holidays, and maintaining social reciprocity. The MVP focuses on local data storage, detailed transaction logging, expenditure analysis, and intelligent gift suggestions based on net balance calculations.",
+    "user_personas": [
+      {
+        "id": "P1",
+        "name": "The Organized Planner",
+        "description": "Keeps detailed records of expenses. Wants to ensure they don't overspend during the holiday season and wants to know exactly how much they spent on specific people over the years.",
+        "goals": ["Track exact expenditure", "Analyze yearly spending trends", "Maintain a budget"]
+      },
+      {
+        "id": "P2",
+        "name": "The Social Reciprocator",
+        "description": "Values fairness in relationships. Wants to ensure they are not giving significantly more expensive gifts than they receive, and vice versa, to maintain balance.",
+        "goals": ["Monitor net balance per person", "Reciprocate appropriately", "Avoid gift repetition"]
+      },
+      {
+        "id": "P3",
+        "name": "The Forgetful Gifter",
+        "description": "Has a large circle of family and friends. Often forgets what they gave someone last year or what they received.",
+        "goals": ["Store gift history", "Receive reminders for upcoming events", "Quickly look up past gift ideas"]
+      }
+    ],
+    "user_stories": [
+      {
+        "id": "US-001",
+        "feature": "People Management",
+        "priority": "P0",
+        "story": "As a user, I want to add a new contact with their name and relationship type (Family, Friend, Colleague) so that I can start tracking gifts for them."
+      },
+      {
+        "id": "US-002",
+        "feature": "Gift Logging",
+        "priority": "P0",
+        "story": "As a user, I want to log a gift I gave to someone, including the monetary value, date, event type, and a description, so that I have a record of my expenditure."
+      },
+      {
+        "id": "US-003",
+        "feature": "Gift Logging",
+        "priority": "P0",
+        "story": "As a user, I want to log a gift I received from someone, including an estimated value, date, and event type, so that I can calculate the net balance."
+      },
+      {
+        "id": "US-004",
+        "feature": "Per-Person Dashboard",
+        "priority": "P0",
+        "story": "As a user, I want to view a summary for a specific person showing Total Given, Total Received, and Net Balance so I can understand the financial dynamic of the relationship."
+      },
+      {
+        "id": "US-005",
+        "feature": "Event History",
+        "priority": "P0",
+        "story": "As a user, I want to see a chronological or grouped history of all exchanges with a specific person (e.g., 'Christmas 2023') to review past interactions."
+      },
+      {
+        "id": "US-006",
+        "feature": "Expenditure Analysis",
+        "priority": "P0",
+        "story": "As a user, I want to view my total spending broken down by month and year to track my overall gifting budget."
+      },
+      {
+        "id": "US-007",
+        "feature": "Gift Assistant",
+        "priority": "P1",
+        "story": "As a user, I want to see a suggested gift value range based on my net balance with that person (e.g., if I am down $50, suggest a smaller gift)."
+      },
+      {
+        "id": "US-008",
+        "feature": "Settings",
+        "priority": "P0",
+        "story": "As a user, I want to set my preferred currency symbol to ensure all values are displayed correctly."
+      }
+    ],
+    "feature_prioritization": {
+      "P0_MVP": [
+        "People Management (CRUD)",
+        "Gift Logging (Given & Received)",
+        "Event Types (Predefined + Custom)",
+        "Per-Person Dashboard (Totals & Net Balance)",
+        "Event History View",
+        "Expenditure Analysis (Monthly/Yearly/Total)",
+        "Local Storage Persistence",
+        "Currency Settings"
+      ],
+      "P1_Post_MVP": [
+        "Gift Assistant (Smart Suggestions)",
+        "Upcoming Event Reminders/Widgets",
+        "Data Export (CSV/JSON)",
+        "Charts & Graphs for Analysis"
+      ]
+    },
+    "technical_architecture": {
+      "platform": "Cross-platform (Flutter recommended for single codebase UI consistency)",
+      "local_storage": "SQLite (via sqflite) or Hive (NoSQL) for offline-first capability",
+      "state_management": "Provider, Riverpod, or Bloc (Flutter) / Redux or Context (React Native)",
+      "architecture_pattern": "Clean Architecture (Domain, Data, Presentation layers) or MVVM",
+      "data_security": "Local database encryption (optional but recommended for financial data)",
+      "testing": "Unit tests for business logic (calculations), Widget tests for UI components"
+    },
+    "data_models": {
+      "Person": {
+        "fields": {
+          "id": "UUID (String)",
+          "name": "String",
+          "relationship": "Enum (Family, Friend, Colleague, Other)",
+          "created_at": "DateTime",
+          "updated_at": "DateTime"
+        }
+      },
+      "Gift": {
+        "fields": {
+          "id": "UUID (String)",
+          "person_id": "UUID (Foreign Key)",
+          "type": "Enum (Given, Received)",
+          "value": "Double",
+          "currency": "String (e.g., 'USD')",
+          "date": "DateTime",
+          "event_type": "String (Birthday, Wedding, Custom, etc.)",
+          "description": "String",
+          "created_at": "DateTime"
+        }
+      },
+      "Settings": {
+        "fields": {
+          "key": "String (e.g., 'default_currency')",
+          "value": "String (e.g., '$')"
+        }
+      }
+    },
+    "ui_considerations": {
+      "design_system": "Material Design 3 (Android) / Human Interface Guidelines (iOS)",
+      "navigation": "Bottom Navigation Bar (Dashboard, People, Analysis, Settings)",
+      "color_palette": "Warm, celebratory tones (e.g., soft reds, teals) mixed with neutral card backgrounds",
+      "accessibility": "Support for dynamic text sizing, screen reader compatibility for numeric values",
+      "input_methods": "Number keypads for currency entry, date pickers, and dropdown chips for event selection"
+    }
+  }
+}

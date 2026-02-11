@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import '../../../models/gift.dart';
-import '../../../models/gift_type.dart';
-import '../../../models/person.dart';
-import '../../../providers/gift_providers.dart';
+import '../../../../models/gift.dart';
+import '../../../../models/gift_type.dart';
+import '../../../../models/person.dart';
+import '../../../../models/relationship_type.dart';
+import '../../../../providers/gift_providers.dart';
 
 class GiftExchangePage extends ConsumerWidget {
   const GiftExchangePage({super.key});
@@ -24,14 +25,22 @@ class GiftExchangePage extends ConsumerWidget {
           if (gifts.isEmpty) {
             return _buildEmptyState(context);
           }
+          final sortedGifts = List<Gift>.from(gifts)
+            ..sort((a, b) => b.date.compareTo(a.date));
           return ListView.builder(
             padding: const EdgeInsets.all(16),
-            itemCount: gifts.length,
+            itemCount: sortedGifts.length,
             itemBuilder: (context, index) {
-              final gift = gifts[index];
+              final gift = sortedGifts[index];
               final person = peopleAsync.value?.firstWhere(
                     (p) => p.id == gift.personId,
-                    orElse: () => Person(id: '', name: 'Unknown', relationship: ''),
+                    orElse: () => Person(
+                      id: '',
+                      name: 'Unknown',
+                      relationship: RelationshipType.other,
+                      createdAt: DateTime.now(),
+                      updatedAt: DateTime.now(),
+                    ),
                   );
               return _GiftCard(gift: gift, person: person);
             },
@@ -73,9 +82,13 @@ class GiftExchangePage extends ConsumerWidget {
 
 class _GiftCard extends StatelessWidget {
   final Gift gift;
-  final Person person;
+  final Person? person;
 
   const _GiftCard({required this.gift, required this.person});
+
+  String _formatDate(DateTime date) {
+    return DateFormat.yMMMd().format(date);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -91,24 +104,24 @@ class _GiftCard extends StatelessWidget {
           width: 48,
           height: 48,
           decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
+            color: color.withAlpha(25),
             shape: BoxShape.circle,
           ),
           child: Icon(icon, color: color),
         ),
         title: Text(
-          gift.description.isNotEmpty ? gift.description : gift.eventType,
+          person?.name ?? 'Unknown',
           style: const TextStyle(fontWeight: FontWeight.w600),
         ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              person.name,
-              style: TextStyle(color: Colors.grey[700], fontSize: 12),
+              gift.description.isNotEmpty ? gift.description : gift.eventType,
+              style: const TextStyle(fontWeight: FontWeight.w600),
             ),
             Text(
-              DateFormat.yMMMd().format(gift.date),
+              _formatDate(gift.date),
               style: TextStyle(color: Colors.grey[600], fontSize: 11),
             ),
           ],

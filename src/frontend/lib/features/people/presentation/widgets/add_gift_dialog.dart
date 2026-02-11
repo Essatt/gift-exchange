@@ -1,24 +1,32 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../models/gift.dart';
 import '../../../../models/gift_type.dart';
+import '../../../../providers/gift_providers.dart';
 
-class AddGiftDialog extends StatefulWidget {
+class AddGiftDialog extends ConsumerStatefulWidget {
   final String personId;
 
   const AddGiftDialog({super.key, required this.personId});
 
   @override
-  State<AddGiftDialog> createState() => _AddGiftDialogState();
+  ConsumerState<AddGiftDialog> createState() => _AddGiftDialogState();
 }
 
-class _AddGiftDialogState extends State<AddGiftDialog> {
+class _AddGiftDialogState extends ConsumerState<AddGiftDialog> {
   final _formKey = GlobalKey<FormState>();
-  final _descriptionController = TextEditingController();
-  final _valueController = TextEditingController();
+  final TextEditingController descriptionController = TextEditingController();
+  final TextEditingController valueController = TextEditingController();
 
-  GiftType _selectedType = GiftType.given;
-  String _selectedEventType = 'Birthday';
-  final _eventTypes = [
+  static const Map<String, IconData> typeSegments = {
+    'Given': Icons.call_made,
+    'Received': Icons.call_received,
+  };
+
+  String selectedType = 'Given';
+  String selectedEventType = 'Birthday';
+  DateTime selectedDate = DateTime.now();
+  static const List<String> eventTypes = [
     'Birthday',
     'Wedding',
     'Housewarming',
@@ -27,131 +35,180 @@ class _AddGiftDialogState extends State<AddGiftDialog> {
     'Custom',
   ];
 
+  static const List<int> quickValues = [10, 25, 50, 100, 200];
+
   @override
   void dispose() {
-    _descriptionController.dispose();
-    _valueController.dispose();
+    descriptionController.dispose();
+    valueController.dispose();
     super.dispose();
+  }
+
+  void _handleSave() {
+    if (_formKey.currentState!.validate()) {
+      final gift = Gift(
+        id: '',
+        personId: widget.personId,
+        type: selectedType == 'Given' ? GiftType.given : GiftType.received,
+        value: double.parse(valueController.text),
+        description: descriptionController.text.trim(),
+        eventType: selectedEventType,
+        date: selectedDate,
+        createdAt: DateTime.now(),
+      );
+
+      final service = ref.read(giftServiceProvider);
+      service.addGift(gift);
+      ref.invalidate(giftsProvider);
+
+      Navigator.of(context).pop(gift);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
       title: const Text('Add Gift'),
-      content: SingleChildScrollView(
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Gift Type (Given/Received)
-              SegmentedButton<GiftType>(
-                segments: const [
-                  ButtonSegment<GiftType>(
-                    value: GiftType.given,
-                    label: 'Given',
-                    icon: Icon(Icons.call_made),
-                  ),
-                  ButtonSegment<GiftType>(
-                    value: GiftType.received,
-                    label: 'Received',
-                    icon: Icon(Icons.call_received),
-                  ),
-                ],
-                selected: {_selectedType},
-                onSelectionChanged: (Set<GiftType> newSelection) {
-                  setState(() {
-                    _selectedType = newSelection.first;
-                  });
-                },
-              ),
-              const SizedBox(height: 16),
-
-              // Description
-              TextFormField(
-                controller: _descriptionController,
-                decoration: const InputDecoration(
-                  labelText: 'Description',
-                  hintText: 'e.g., Watch, Cash Gift',
-                  border: OutlineInputBorder(),
-                  prefixIcon: const Icon(Icons.description),
+      content: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 400),
+        child: SingleChildScrollView(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SegmentedButton<String>(
+                  segments: typeSegments.entries
+                      .map((entry) => ButtonSegment<String>(
+                            value: entry.key,
+                            label: Text(entry.key),
+                            icon: Icon(entry.value),
+                          ))
+                      .toList(),
+                  selected: {selectedType},
+                  onSelectionChanged: (Set<String> newSelection) {
+                    setState(() {
+                      selectedType = newSelection.first;
+                    });
+                  },
                 ),
-                textCapitalization: TextCapitalization.sentences,
-                validator: (value) {
-                  if (value == null || value!.trim().isEmpty) {
-                    return 'Please enter a description';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-
-              // Value
-              TextFormField(
-                controller: _valueController,
-                decoration: const InputDecoration(
-                  labelText: 'Value (\$)',
-                  hintText: '0.00',
-                  border: OutlineInputBorder(),
-                  prefixText: '\$',
-                ),
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                validator: (value) {
-                  if (value == null || value!.trim().isEmpty) {
-                    return 'Please enter a value';
-                  }
-                  final numValue = double.tryParse(value!);
-                  if (numValue == null || numValue! <= 0) {
-                    return 'Please enter a positive value';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-
-              // Event Type
-              const Text(
-                'Event Type',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: _eventTypes.map((type) {
-                  final isSelected = _selectedEventType == type;
-                  return ChoiceChip(
-                    label: type,
-                    selected: isSelected,
-                    onSelected: () {
+                const SizedBox(height: 24),
+                DropdownButtonFormField<String>(
+                  initialValue: selectedEventType,
+                  decoration: const InputDecoration(
+                    labelText: 'Event Type',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: eventTypes
+                      .map((String type) => DropdownMenuItem<String>(
+                            value: type,
+                            child: Text(type),
+                          ))
+                      .toList(),
+                  onChanged: (String? newValue) {
+                    if (newValue != null) {
                       setState(() {
-                        _selectedEventType = type;
+                        selectedEventType = newValue;
                       });
-                    },
-                  );
-                }).toList(),
-              ),
-
-              // Quick Value Buttons
-              const SizedBox(height: 16),
-              const Text(
-                'Quick Values',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [10, 25, 50, 100, 200].map((value) {
-                  return OutlinedButton(
-                    onPressed: () {
-                      _valueController.text = value.toString();
-                    },
-                    child: Text('\$$value'),
-                  );
-                }).toList(),
-              ),
-            ],
+                    }
+                  },
+                  validator: (value) =>
+                      value == null ? 'Please select an event type' : null,
+                ),
+                const SizedBox(height: 24),
+                InkWell(
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: selectedDate,
+                      firstDate: DateTime(2000),
+                      lastDate: DateTime.now(),
+                    );
+                    if (picked != null) {
+                      setState(() {
+                        selectedDate = picked;
+                      });
+                    }
+                  },
+                  child: InputDecorator(
+                    decoration: const InputDecoration(
+                      labelText: 'Date',
+                      border: OutlineInputBorder(),
+                      suffixIcon: Icon(Icons.calendar_today),
+                    ),
+                    child: Text(
+                      '${selectedDate.day}/${selectedDate.month}/${selectedDate.year}',
+                      style: const TextStyle(fontSize: 16),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                TextFormField(
+                  controller: descriptionController,
+                  decoration: const InputDecoration(
+                    labelText: 'Description',
+                    hintText: 'e.g., Watch, Cash Gift',
+                    border: OutlineInputBorder(),
+                  ),
+                  maxLength: 100,
+                  buildCounter: (context, {required currentLength, required maxLength, required isFocused}) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                      child: Text('$currentLength/$maxLength'),
+                    );
+                  },
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Please enter a description';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: valueController,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(
+                    labelText: 'Value',
+                    prefixText: r'$',
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Please enter a value';
+                    }
+                    final parsedValue = double.tryParse(value);
+                    if (parsedValue == null || parsedValue <= 0) {
+                      return 'Please enter a valid positive number';
+                    }
+                    if (parsedValue > 999999.99) {
+                      return 'Value cannot exceed \$999,999.99';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Quick Values',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: quickValues
+                      .map((val) => ActionChip(
+                            label: Text('\$$val'),
+                            onPressed: () {
+                              valueController.text = val.toString();
+                            },
+                            visualDensity: VisualDensity.adaptivePlatformDensity,
+                          ))
+                      .toList(),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -161,17 +218,7 @@ class _AddGiftDialogState extends State<AddGiftDialog> {
           child: const Text('Cancel'),
         ),
         FilledButton(
-          onPressed: () {
-            if (_formKey.currentState!.validate()) {
-              Navigator.of(context).pop({
-                'personId': widget.personId,
-                'type': _selectedType,
-                'description': _descriptionController.text.trim(),
-                'value': double.parse(_valueController.text),
-                'eventType': _selectedEventType,
-              });
-            }
-          },
+          onPressed: _handleSave,
           child: const Text('Save'),
         ),
       ],

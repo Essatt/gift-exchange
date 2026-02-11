@@ -2,7 +2,6 @@ import 'package:hive_flutter/hive_flutter.dart';
 import '../models/person.dart';
 import '../models/gift.dart';
 import '../models/gift_type.dart';
-import '../models/relationship_type.dart';
 
 class GiftService {
   // Constants for box names

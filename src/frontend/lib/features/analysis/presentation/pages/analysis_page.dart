@@ -1,19 +1,32 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 import '../../../../models/gift.dart';
 import '../../../../models/gift_type.dart';
 import '../../../../models/person.dart';
-import '../../../../services/gift_service.dart';
+import '../../../../models/relationship_type.dart';
+import '../../../../providers/gift_providers.dart';
+import '_top_spenders.dart';
 
-class AnalysisPage extends ConsumerWidget {
+class AnalysisPage extends ConsumerStatefulWidget {
   const AnalysisPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AnalysisPage> createState() => _AnalysisPageState();
+}
+
+class _AnalysisPageState extends ConsumerState<AnalysisPage> {
+  String _selectedTimeframe = 'overall';
+
+  void _onTimeframeChanged(String value) {
+    setState(() {
+      _selectedTimeframe = value;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final giftsAsync = ref.watch(giftsProvider);
     final peopleAsync = ref.watch(peopleProvider);
-    final service = ref.watch(giftServiceProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -26,14 +39,17 @@ class AnalysisPage extends ConsumerWidget {
             return _buildEmptyState(context);
           }
 
-          final totalSpent = gifts
+          // Filter gifts based on timeframe
+          final filteredGifts = _filterGiftsByTimeframe(gifts);
+
+          final totalSpent = filteredGifts
               .where((g) => g.type == GiftType.given)
               .fold<double>(0, (sum, g) => sum + g.value);
-          final totalReceived = gifts
+          final totalReceived = filteredGifts
               .where((g) => g.type == GiftType.received)
               .fold<double>(0, (sum, g) => sum + g.value);
 
-          final spendingByPerson = _calculateSpendingByPerson(gifts, peopleAsync.value ?? []);
+          final spendingByPerson = _calculateSpendingByPerson(filteredGifts, peopleAsync.value ?? []);
 
           return RefreshIndicator(
             onRefresh: () async {
@@ -44,9 +60,12 @@ class AnalysisPage extends ConsumerWidget {
               children: [
                 _buildOverallStats(context, totalSpent, totalReceived),
                 const SizedBox(height: 16),
-                const _TimeframeToggle(),
+                _TimeframeToggle(
+                  selected: _selectedTimeframe,
+                  onSelectionChanged: _onTimeframeChanged,
+                ),
                 const SizedBox(height: 16),
-                _buildTopSpenders(spendingByPerson),
+                TopSpenders(spendingByPerson: spendingByPerson),
               ],
             ),
           );
@@ -57,6 +76,52 @@ class AnalysisPage extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  List<Gift> _filterGiftsByTimeframe(List<Gift> gifts) {
+    final now = DateTime.now();
+
+    switch (_selectedTimeframe) {
+      case 'overall':
+        return gifts;
+      case 'yearly':
+        final startOfYear = DateTime(now.year, 1, 1);
+        final endOfYear = DateTime(now.year, 12, 31, 23, 59, 59);
+        return gifts
+            .where((g) => g.date.isAfter(startOfYear) && g.date.isBefore(endOfYear))
+            .toList();
+      case 'monthly':
+        final startOfMonth = DateTime(now.year, now.month, 1);
+        final endOfMonth = DateTime(now.year, now.month + 1, 1).subtract(const Duration(days: 1));
+        final endOfDay = DateTime(endOfMonth.year, endOfMonth.month, endOfMonth.day, 23, 59, 59);
+        return gifts
+            .where((g) => g.date.isAfter(startOfMonth) && g.date.isBefore(endOfDay))
+            .toList();
+      default:
+        return gifts;
+    }
+  }
+
+  Map<Person, double> _calculateSpendingByPerson(List<Gift> gifts, List<Person> people) {
+    final Map<Person, double> spending = {};
+
+    for (final gift in gifts) {
+      if (gift.type == GiftType.given) {
+        final person = people.firstWhere(
+          (p) => p.id == gift.personId,
+          orElse: () => Person(
+            id: gift.personId,
+            name: 'Unknown',
+            relationship: RelationshipType.other,
+            createdAt: DateTime.now(),
+            updatedAt: DateTime.now(),
+          ),
+        );
+        spending[person] = (spending[person] ?? 0) + gift.value;
+      }
+    }
+
+    return spending;
   }
 
   Widget _buildEmptyState(BuildContext context) {
@@ -101,8 +166,16 @@ class AnalysisPage extends ConsumerWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                _OverallStatItem('Total Given', '\$$totalSpent.toStringAsFixed(2)}', Colors.red),
-                _OverallStatItem('Total Received', '\$$totalReceived.toStringAsFixed(2)}', Colors.green),
+                _OverallStatItem(
+                  label: 'Total Given',
+                  value: '\$${totalSpent.toStringAsFixed(2)}',
+                  color: Colors.red,
+                ),
+                _OverallStatItem(
+                  label: 'Total Received',
+                  value: '\$${totalReceived.toStringAsFixed(2)}',
+                  color: Colors.green,
+                ),
               ],
             ),
             const SizedBox(height: 16),
@@ -167,7 +240,13 @@ class _OverallStatItem extends StatelessWidget {
 }
 
 class _TimeframeToggle extends StatelessWidget {
-  const _TimeframeToggle({super.key});
+  final String selected;
+  final Function(String) onSelectionChanged;
+
+  const _TimeframeToggle({
+    required this.selected,
+    required this.onSelectionChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -175,98 +254,24 @@ class _TimeframeToggle extends StatelessWidget {
       segments: const [
         ButtonSegment(
           value: 'overall',
-          label: 'Overall',
-          icon: Icon(Icons.infinite),
+          label: Text('Overall'),
+          icon: Icon(Icons.all_inclusive),
         ),
         ButtonSegment(
           value: 'yearly',
-          label: 'Yearly',
+          label: Text('Yearly'),
           icon: Icon(Icons.calendar_today),
         ),
         ButtonSegment(
           value: 'monthly',
-          label: 'Monthly',
+          label: Text('Monthly'),
           icon: Icon(Icons.calendar_month),
         ),
       ],
-      selected: const {'overall'},
+      selected: {selected},
       onSelectionChanged: (Set<String> newSelection) {
+        onSelectionChanged(newSelection.first);
       },
     );
   }
-}
-
-class _TopSpenders extends StatelessWidget {
-  final Map<Person, double> spendingByPerson;
-
-  const _TopSpenders({required this.spendingByPerson});
-
-  @override
-  Widget build(BuildContext context) {
-    final sorted = spendingByPerson.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Top Recipients',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: Colors.grey[700],
-                  ),
-            ),
-            const SizedBox(height: 12),
-            ...sorted.take(5).map((entry) {
-              final person = entry.key;
-              final amount = entry.value;
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            person.name,
-                            style: const TextStyle(fontWeight: FontWeight.w600),
-                          ),
-                          Text(
-                            '\$$amount.toStringAsFixed(2)}',
-                            style: TextStyle(
-                              color: Colors.orange,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 18,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                );
-              }),
-          ],
-        ),
-      );
-    }
-}
-
-Map<Person, double> _calculateSpendingByPerson(List<Gift> gifts, List<Person> people) {
-  final Map<Person, double> spending = {};
-
-  for (final gift in gifts) {
-    if (gift.type == GiftType.given) {
-      final person = people.firstWhere(
-            (p) => p.id == gift.personId,
-            orElse: () => Person(id: '', name: 'Unknown'),
-          );
-      spending[person] = (spending[person] ?? 0) + gift.value;
-    }
-  }
-
-  return spending;
 }

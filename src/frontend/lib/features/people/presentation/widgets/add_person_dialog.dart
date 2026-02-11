@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import '../../../models/relationship_type.dart';
-import '../../../models/person.dart';
-import '../../../providers/gift_providers.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../models/person.dart';
+import '../../../../models/relationship_type.dart';
+import '../../../../providers/gift_providers.dart';
 
 class AddPersonDialog extends ConsumerStatefulWidget {
   const AddPersonDialog({super.key});
@@ -35,11 +36,13 @@ class _AddPersonDialogState extends ConsumerState<AddPersonDialog> {
               decoration: const InputDecoration(
                 labelText: 'Name',
                 border: OutlineInputBorder(),
-                prefixIcon: const Icon(Icons.person),
+                prefixIcon: Icon(Icons.person),
+                counterText: '',
               ),
+              maxLength: 50,
               textCapitalization: TextCapitalization.words,
               validator: (value) {
-                if (value == null || value!.trim().isEmpty) {
+                if (value == null || value.trim().isEmpty) {
                   return 'Please enter a name';
                 }
                 return null;
@@ -52,7 +55,7 @@ class _AddPersonDialogState extends ConsumerState<AddPersonDialog> {
             ),
             const SizedBox(height: 8),
             DropdownButtonFormField<RelationshipType>(
-              value: _selectedRelationship,
+              initialValue: _selectedRelationship,
               decoration: const InputDecoration(
                 border: OutlineInputBorder(),
               ),
@@ -77,7 +80,7 @@ class _AddPersonDialogState extends ConsumerState<AddPersonDialog> {
               onChanged: (value) {
                 if (value != null) {
                   setState(() {
-                    _selectedRelationship = value!;
+                    _selectedRelationship = value;
                   });
                 }
               },

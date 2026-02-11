@@ -9,7 +9,7 @@ final giftServiceProvider = Provider<GiftService>((ref) {
 });
 
 // People List Provider
-final peopleProvider = FutureProvider<List<Person>>((ref) async {
+final peopleProvider = FutureProvider.autoDispose<List<Person>>((ref) async {
   final service = ref.watch(giftServiceProvider);
   return service.getAllPeople();
 });
@@ -21,19 +21,19 @@ final personProvider = Provider.family<Person?, String>((ref, id) {
 });
 
 // Gifts List Provider
-final giftsProvider = FutureProvider<List<Gift>>((ref) async {
+final giftsProvider = FutureProvider.autoDispose<List<Gift>>((ref) async {
   final service = ref.watch(giftServiceProvider);
   return service.getAllGifts();
 });
 
 // Gifts by Person Provider
-final giftsByPersonProvider = Provider.family<List<Gift>, String>((ref, personId) {
+final giftsByPersonProvider = Provider.family.autoDispose<List<Gift>, String>((ref, personId) {
   final service = ref.watch(giftServiceProvider);
   return service.getGiftsByPersonId(personId);
 });
 
 // Person Stats Provider
-final personStatsProvider = Provider.family<PersonStats, String>((ref, personId) {
+final personStatsProvider = Provider.family.autoDispose<PersonStats, String>((ref, personId) {
   final service = ref.watch(giftServiceProvider);
   return PersonStats(
     totalGiven: service.getTotalGivenForPerson(personId),

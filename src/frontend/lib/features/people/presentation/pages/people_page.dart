@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../models/person.dart';
-import '../../../providers/gift_providers.dart';
+import '../../../../models/person.dart';
+import '../../../../models/relationship_type.dart';
+import '../../../../providers/gift_providers.dart';
+import '../../../../services/gift_service.dart';
 import '../widgets/add_person_dialog.dart';
+import 'person_detail_page.dart';
 
 class PeoplePage extends ConsumerWidget {
   const PeoplePage({super.key});
@@ -88,22 +91,23 @@ class _PersonCard extends StatelessWidget {
   final VoidCallback onTap;
 
   const _PersonCard({
-    super.key,
     required this.person,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    final color = _getRelationshipColor(person.relationship);
+
     return Card(
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         leading: CircleAvatar(
-          backgroundColor: _getRelationshipColor(person.relationship).withOpacity(0.2),
+          backgroundColor: color.withAlpha(25),
           child: Text(
             person.name.isNotEmpty ? person.name[0].toUpperCase() : '?',
             style: TextStyle(
-              color: _getRelationshipColor(person.relationship),
+              color: color,
               fontWeight: FontWeight.bold,
               fontSize: 20,
             ),
@@ -120,10 +124,58 @@ class _PersonCard extends StatelessWidget {
             fontSize: 12,
           ),
         ),
-        trailing: const Icon(Icons.chevron_right),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.delete_outline),
+              onPressed: () => _showDeleteConfirmation(context, person),
+              color: Colors.grey[600],
+              tooltip: 'Delete person',
+            ),
+            const Icon(Icons.chevron_right),
+          ],
+        ),
         onTap: onTap,
       ),
     );
+  }
+
+  void _showDeleteConfirmation(BuildContext context, Person person) {
+    showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete Person?'),
+        content: Text(
+          'This will delete "${person.name}" and ALL their gifts. This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    ).then((confirmed) async {
+      if (confirmed == true) {
+        final service = GiftService();
+        await service.deletePerson(person.id);
+        
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('${person.name} deleted'),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      }
+    });
   }
 
   Color _getRelationshipColor(RelationshipType type) {

@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../models/person.dart';
 import '../../../../models/relationship_type.dart';
 import '../../../../providers/gift_providers.dart';
-import '../../../../services/gift_service.dart';
 import '../widgets/add_person_dialog.dart';
 import 'person_detail_page.dart';
 
@@ -12,47 +11,33 @@ class PeoplePage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final peopleAsync = ref.watch(peopleProvider);
+    final people = ref.watch(peopleProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('People'),
-        elevation: 0,
-      ),
-      body: peopleAsync.when(
-        data: (people) {
-          if (people.isEmpty) {
-            return _buildEmptyState(context);
-          }
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: people.length,
-            itemBuilder: (context, index) {
-              final person = people[index];
-              return _PersonCard(
-                person: person,
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => PersonDetailPage(person: person),
-                    ),
-                  );
-                },
-              );
-            },
-          );
-        },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stack) => Center(
-          child: Text('Error: $error'),
-        ),
-      ),
+      appBar: AppBar(title: const Text('People'), elevation: 0),
+      body: people.isEmpty
+          ? _buildEmptyState(context)
+          : ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: people.length,
+              itemBuilder: (context, index) {
+                final person = people[index];
+                return _PersonCard(
+                  person: person,
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => PersonDetailPage(person: person),
+                      ),
+                    );
+                  },
+                  onDelete: () => _confirmDeletePerson(context, ref, person),
+                );
+              },
+            ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
-          showDialog(
-            context: context,
-            builder: (_) => const AddPersonDialog(),
-          );
+          showDialog(context: context, builder: (_) => const AddPersonDialog());
         },
         label: const Text('Add Person'),
         icon: const Icon(Icons.add),
@@ -61,38 +46,83 @@ class PeoplePage extends ConsumerWidget {
   }
 
   Widget _buildEmptyState(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.people_outline, size: 80, color: Colors.grey[400]),
+          Icon(Icons.people_outline, size: 80, color: colors.onSurfaceVariant),
           const SizedBox(height: 24),
           Text(
             'No people added yet',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: Colors.grey[600],
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(color: colors.onSurfaceVariant),
           ),
           const SizedBox(height: 8),
           Text(
-            'Tap + to add your first person',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Colors.grey[500],
-                ),
+            'Tap "Add Person" to get started',
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: colors.onSurfaceVariant),
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _confirmDeletePerson(
+    BuildContext context,
+    WidgetRef ref,
+    Person person,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final errorColor = Theme.of(context).colorScheme.error;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete Person?'),
+        content: Text(
+          'This will delete "${person.name}" and ALL their gifts. This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: TextButton.styleFrom(foregroundColor: errorColor),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      final service = ref.read(giftServiceProvider);
+      await service.deletePerson(person.id);
+      ref.read(refreshSignalProvider.notifier).state++;
+
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('${person.name} deleted'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
   }
 }
 
 class _PersonCard extends StatelessWidget {
   final Person person;
   final VoidCallback onTap;
+  final VoidCallback onDelete;
 
   const _PersonCard({
     required this.person,
     required this.onTap,
+    required this.onDelete,
   });
 
   @override
@@ -101,7 +131,10 @@ class _PersonCard extends StatelessWidget {
 
     return Card(
       child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 12,
+        ),
         leading: CircleAvatar(
           backgroundColor: color.withAlpha(25),
           child: Text(
@@ -120,62 +153,39 @@ class _PersonCard extends StatelessWidget {
         subtitle: Text(
           _getRelationshipLabel(person.relationship),
           style: TextStyle(
-            color: Colors.grey[600],
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
             fontSize: 12,
           ),
         ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              icon: const Icon(Icons.delete_outline),
-              onPressed: () => _showDeleteConfirmation(context, person),
-              color: Colors.grey[600],
-              tooltip: 'Delete person',
+        trailing: PopupMenuButton<String>(
+          onSelected: (value) {
+            if (value == 'delete') onDelete();
+          },
+          itemBuilder: (context) => [
+            PopupMenuItem(
+              value: 'delete',
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.delete_outline,
+                    color: Theme.of(context).colorScheme.error,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Delete',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                ],
+              ),
             ),
-            const Icon(Icons.chevron_right),
           ],
         ),
         onTap: onTap,
       ),
     );
-  }
-
-  void _showDeleteConfirmation(BuildContext context, Person person) {
-    showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Delete Person?'),
-        content: Text(
-          'This will delete "${person.name}" and ALL their gifts. This cannot be undone.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    ).then((confirmed) async {
-      if (confirmed == true) {
-        final service = GiftService();
-        await service.deletePerson(person.id);
-        
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('${person.name} deleted'),
-              duration: const Duration(seconds: 2),
-            ),
-          );
-        }
-      }
-    });
   }
 
   Color _getRelationshipColor(RelationshipType type) {

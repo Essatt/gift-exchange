@@ -26,6 +26,7 @@ class _AddGiftDialogState extends ConsumerState<AddGiftDialog> {
   String selectedType = 'Given';
   String selectedEventType = 'Birthday';
   DateTime selectedDate = DateTime.now();
+  bool _isSaving = false;
   static const List<String> eventTypes = [
     'Birthday',
     'Wedding',
@@ -44,8 +45,10 @@ class _AddGiftDialogState extends ConsumerState<AddGiftDialog> {
     super.dispose();
   }
 
-  void _handleSave() {
+  Future<void> _handleSave() async {
+    if (_isSaving) return;
     if (_formKey.currentState!.validate()) {
+      setState(() => _isSaving = true);
       final gift = Gift(
         id: '',
         personId: widget.personId,
@@ -58,10 +61,12 @@ class _AddGiftDialogState extends ConsumerState<AddGiftDialog> {
       );
 
       final service = ref.read(giftServiceProvider);
-      service.addGift(gift);
-      ref.invalidate(giftsProvider);
+      await service.addGift(gift);
+      ref.read(refreshSignalProvider.notifier).state++;
 
-      Navigator.of(context).pop(gift);
+      if (mounted) {
+        Navigator.of(context).pop(gift);
+      }
     }
   }
 
@@ -80,11 +85,13 @@ class _AddGiftDialogState extends ConsumerState<AddGiftDialog> {
               children: [
                 SegmentedButton<String>(
                   segments: typeSegments.entries
-                      .map((entry) => ButtonSegment<String>(
-                            value: entry.key,
-                            label: Text(entry.key),
-                            icon: Icon(entry.value),
-                          ))
+                      .map(
+                        (entry) => ButtonSegment<String>(
+                          value: entry.key,
+                          label: Text(entry.key),
+                          icon: Icon(entry.value),
+                        ),
+                      )
                       .toList(),
                   selected: {selectedType},
                   onSelectionChanged: (Set<String> newSelection) {
@@ -101,10 +108,12 @@ class _AddGiftDialogState extends ConsumerState<AddGiftDialog> {
                     border: OutlineInputBorder(),
                   ),
                   items: eventTypes
-                      .map((String type) => DropdownMenuItem<String>(
-                            value: type,
-                            child: Text(type),
-                          ))
+                      .map(
+                        (String type) => DropdownMenuItem<String>(
+                          value: type,
+                          child: Text(type),
+                        ),
+                      )
                       .toList(),
                   onChanged: (String? newValue) {
                     if (newValue != null) {
@@ -152,12 +161,18 @@ class _AddGiftDialogState extends ConsumerState<AddGiftDialog> {
                     border: OutlineInputBorder(),
                   ),
                   maxLength: 100,
-                  buildCounter: (context, {required currentLength, required maxLength, required isFocused}) {
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                      child: Text('$currentLength/$maxLength'),
-                    );
-                  },
+                  buildCounter:
+                      (
+                        context, {
+                        required currentLength,
+                        required maxLength,
+                        required isFocused,
+                      }) {
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                          child: Text('$currentLength/$maxLength'),
+                        );
+                      },
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
                       return 'Please enter a description';
@@ -168,7 +183,9 @@ class _AddGiftDialogState extends ConsumerState<AddGiftDialog> {
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: valueController,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   decoration: const InputDecoration(
                     labelText: 'Value',
                     prefixText: r'$',
@@ -198,13 +215,15 @@ class _AddGiftDialogState extends ConsumerState<AddGiftDialog> {
                   spacing: 8,
                   runSpacing: 8,
                   children: quickValues
-                      .map((val) => ActionChip(
-                            label: Text('\$$val'),
-                            onPressed: () {
-                              valueController.text = val.toString();
-                            },
-                            visualDensity: VisualDensity.adaptivePlatformDensity,
-                          ))
+                      .map(
+                        (val) => ActionChip(
+                          label: Text('\$$val'),
+                          onPressed: () {
+                            valueController.text = val.toString();
+                          },
+                          visualDensity: VisualDensity.adaptivePlatformDensity,
+                        ),
+                      )
                       .toList(),
                 ),
               ],
@@ -218,8 +237,14 @@ class _AddGiftDialogState extends ConsumerState<AddGiftDialog> {
           child: const Text('Cancel'),
         ),
         FilledButton(
-          onPressed: _handleSave,
-          child: const Text('Save'),
+          onPressed: _isSaving ? null : _handleSave,
+          child: _isSaving
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Save'),
         ),
       ],
     );

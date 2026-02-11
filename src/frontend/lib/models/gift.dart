@@ -66,4 +66,12 @@ class Gift extends HiveObject {
   String toString() {
     return 'Gift(id: $id, personId: $personId, type: $type, value: $value, eventType: $eventType)';
   }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is Gift && runtimeType == other.runtimeType && id == other.id;
+
+  @override
+  int get hashCode => id.hashCode;
 }

@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 import '../../../../models/gift.dart';
 import '../../../../models/gift_type.dart';
 import '../../../../models/person.dart';
-import '../../../../models/relationship_type.dart';
 import '../../../../providers/gift_providers.dart';
 
 class GiftExchangePage extends ConsumerWidget {
@@ -12,67 +11,50 @@ class GiftExchangePage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final giftsAsync = ref.watch(giftsProvider);
-    final peopleAsync = ref.watch(peopleProvider);
+    final sortedGifts = ref.watch(sortedGiftsProvider);
+    final peopleMap = ref.watch(peopleMapProvider);
+
+    if (sortedGifts.isEmpty) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Recent Exchanges'), elevation: 0),
+        body: _buildEmptyState(context),
+      );
+    }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Recent Exchanges'),
-        elevation: 0,
-      ),
-      body: giftsAsync.when(
-        data: (gifts) {
-          if (gifts.isEmpty) {
-            return _buildEmptyState(context);
-          }
-          final sortedGifts = List<Gift>.from(gifts)
-            ..sort((a, b) => b.date.compareTo(a.date));
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: sortedGifts.length,
-            itemBuilder: (context, index) {
-              final gift = sortedGifts[index];
-              final person = peopleAsync.value?.firstWhere(
-                    (p) => p.id == gift.personId,
-                    orElse: () => Person(
-                      id: '',
-                      name: 'Unknown',
-                      relationship: RelationshipType.other,
-                      createdAt: DateTime.now(),
-                      updatedAt: DateTime.now(),
-                    ),
-                  );
-              return _GiftCard(gift: gift, person: person);
-            },
-          );
+      appBar: AppBar(title: const Text('Recent Exchanges'), elevation: 0),
+      body: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: sortedGifts.length,
+        itemBuilder: (context, index) {
+          final gift = sortedGifts[index];
+          final person = peopleMap[gift.personId];
+          return _GiftCard(gift: gift, person: person);
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stack) => Center(
-          child: Text('Error: $error'),
-        ),
       ),
     );
   }
 
   Widget _buildEmptyState(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.history, size: 80, color: Colors.grey[400]),
+          Icon(Icons.history, size: 80, color: colors.onSurfaceVariant),
           const SizedBox(height: 24),
           Text(
             'No exchanges recorded yet',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: Colors.grey[600],
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(color: colors.onSurfaceVariant),
           ),
           const SizedBox(height: 8),
           Text(
             'Start logging gifts to see your history',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Colors.grey[500],
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: colors.onSurfaceVariant),
           ),
         ],
       ),
@@ -93,13 +75,17 @@ class _GiftCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isGiven = gift.type == GiftType.given;
-    final color = isGiven ? Colors.red : Colors.green;
+    final colors = Theme.of(context).colorScheme;
+    final color = isGiven ? colors.error : colors.tertiary;
     final icon = isGiven ? Icons.call_made : Icons.call_received;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 12,
+        ),
         leading: Container(
           width: 48,
           height: 48,
@@ -122,7 +108,10 @@ class _GiftCard extends StatelessWidget {
             ),
             Text(
               _formatDate(gift.date),
-              style: TextStyle(color: Colors.grey[600], fontSize: 11),
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                fontSize: 11,
+              ),
             ),
           ],
         ),

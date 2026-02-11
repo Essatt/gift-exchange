@@ -15,6 +15,7 @@ class _AddPersonDialogState extends ConsumerState<AddPersonDialog> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   RelationshipType _selectedRelationship = RelationshipType.friend;
+  bool _isSaving = false;
 
   @override
   void dispose() {
@@ -56,9 +57,7 @@ class _AddPersonDialogState extends ConsumerState<AddPersonDialog> {
             const SizedBox(height: 8),
             DropdownButtonFormField<RelationshipType>(
               initialValue: _selectedRelationship,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-              ),
+              decoration: const InputDecoration(border: OutlineInputBorder()),
               items: const [
                 DropdownMenuItem(
                   value: RelationshipType.family,
@@ -94,22 +93,33 @@ class _AddPersonDialogState extends ConsumerState<AddPersonDialog> {
           child: const Text('Cancel'),
         ),
         FilledButton(
-          onPressed: () {
-            if (_formKey.currentState!.validate()) {
-              final service = ref.read(giftServiceProvider);
-              final person = Person(
-                id: '',
-                name: _nameController.text.trim(),
-                relationship: _selectedRelationship,
-                createdAt: DateTime.now(),
-                updatedAt: DateTime.now(),
-              );
-              service.addPerson(person);
-              ref.invalidate(peopleProvider);
-              Navigator.of(context).pop();
-            }
-          },
-          child: const Text('Add'),
+          onPressed: _isSaving
+              ? null
+              : () async {
+                  if (_formKey.currentState!.validate()) {
+                    setState(() => _isSaving = true);
+                    final service = ref.read(giftServiceProvider);
+                    final person = Person(
+                      id: '',
+                      name: _nameController.text.trim(),
+                      relationship: _selectedRelationship,
+                      createdAt: DateTime.now(),
+                      updatedAt: DateTime.now(),
+                    );
+                    await service.addPerson(person);
+                    ref.read(refreshSignalProvider.notifier).state++;
+                    if (context.mounted) {
+                      Navigator.of(context).pop();
+                    }
+                  }
+                },
+          child: _isSaving
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Add'),
         ),
       ],
     );

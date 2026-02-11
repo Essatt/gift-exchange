@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../models/gift.dart';
 import '../../../../models/gift_type.dart';
 import '../../../../models/person.dart';
-import '../../../../models/relationship_type.dart';
 import '../../../../providers/gift_providers.dart';
 import '_top_spenders.dart';
 
@@ -25,55 +24,63 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
 
   @override
   Widget build(BuildContext context) {
-    final giftsAsync = ref.watch(giftsProvider);
-    final peopleAsync = ref.watch(peopleProvider);
+    final gifts = ref.watch(giftsProvider);
+    final peopleMap = ref.watch(peopleMapProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Analysis'),
-        elevation: 0,
-      ),
-      body: giftsAsync.when(
-        data: (gifts) {
-          if (gifts.isEmpty) {
-            return _buildEmptyState(context);
-          }
+      appBar: AppBar(title: const Text('Analysis'), elevation: 0),
+      body: gifts.isEmpty
+          ? _buildEmptyState(context)
+          : _buildContent(context, gifts, peopleMap),
+    );
+  }
 
-          // Filter gifts based on timeframe
-          final filteredGifts = _filterGiftsByTimeframe(gifts);
+  Widget _buildContent(
+    BuildContext context,
+    List<Gift> gifts,
+    Map<String, Person> peopleMap,
+  ) {
+    final filteredGifts = _filterGiftsByTimeframe(gifts);
 
-          final totalSpent = filteredGifts
-              .where((g) => g.type == GiftType.given)
-              .fold<double>(0, (sum, g) => sum + g.value);
-          final totalReceived = filteredGifts
-              .where((g) => g.type == GiftType.received)
-              .fold<double>(0, (sum, g) => sum + g.value);
+    final totalSpent = filteredGifts
+        .where((g) => g.type == GiftType.given)
+        .fold<double>(0, (sum, g) => sum + g.value);
+    final totalReceived = filteredGifts
+        .where((g) => g.type == GiftType.received)
+        .fold<double>(0, (sum, g) => sum + g.value);
 
-          final spendingByPerson = _calculateSpendingByPerson(filteredGifts, peopleAsync.value ?? []);
+    final spendingByPerson = _calculateSpendingByPerson(
+      filteredGifts,
+      peopleMap,
+    );
 
-          return RefreshIndicator(
-            onRefresh: () async {
-              ref.invalidate(giftsProvider);
-            },
-            child: ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                _buildOverallStats(context, totalSpent, totalReceived),
-                const SizedBox(height: 16),
-                _TimeframeToggle(
-                  selected: _selectedTimeframe,
-                  onSelectionChanged: _onTimeframeChanged,
-                ),
-                const SizedBox(height: 16),
-                TopSpenders(spendingByPerson: spendingByPerson),
-              ],
-            ),
-          );
-        },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stack) => Center(
-          child: Text('Error: $error'),
-        ),
+    final timeframeLabel = switch (_selectedTimeframe) {
+      'yearly' => "This Year's Spending",
+      'monthly' => "This Month's Spending",
+      _ => 'Overall Spending',
+    };
+
+    return RefreshIndicator(
+      onRefresh: () async {
+        ref.read(refreshSignalProvider.notifier).state++;
+      },
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          _buildOverallStats(
+            context,
+            totalSpent,
+            totalReceived,
+            timeframeLabel,
+          ),
+          const SizedBox(height: 16),
+          _TimeframeToggle(
+            selected: _selectedTimeframe,
+            onSelectionChanged: _onTimeframeChanged,
+          ),
+          const SizedBox(height: 16),
+          TopSpenders(spendingByPerson: spendingByPerson),
+        ],
       ),
     );
   }
@@ -82,42 +89,27 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
     final now = DateTime.now();
 
     switch (_selectedTimeframe) {
-      case 'overall':
-        return gifts;
       case 'yearly':
-        final startOfYear = DateTime(now.year, 1, 1);
-        final endOfYear = DateTime(now.year, 12, 31, 23, 59, 59);
-        return gifts
-            .where((g) => g.date.isAfter(startOfYear) && g.date.isBefore(endOfYear))
-            .toList();
+        return gifts.where((g) => g.date.year == now.year).toList();
       case 'monthly':
-        final startOfMonth = DateTime(now.year, now.month, 1);
-        final endOfMonth = DateTime(now.year, now.month + 1, 1).subtract(const Duration(days: 1));
-        final endOfDay = DateTime(endOfMonth.year, endOfMonth.month, endOfMonth.day, 23, 59, 59);
         return gifts
-            .where((g) => g.date.isAfter(startOfMonth) && g.date.isBefore(endOfDay))
+            .where((g) => g.date.year == now.year && g.date.month == now.month)
             .toList();
       default:
         return gifts;
     }
   }
 
-  Map<Person, double> _calculateSpendingByPerson(List<Gift> gifts, List<Person> people) {
-    final Map<Person, double> spending = {};
+  Map<String, double> _calculateSpendingByPerson(
+    List<Gift> gifts,
+    Map<String, Person> peopleMap,
+  ) {
+    final Map<String, double> spending = {};
 
     for (final gift in gifts) {
       if (gift.type == GiftType.given) {
-        final person = people.firstWhere(
-          (p) => p.id == gift.personId,
-          orElse: () => Person(
-            id: gift.personId,
-            name: 'Unknown',
-            relationship: RelationshipType.other,
-            createdAt: DateTime.now(),
-            updatedAt: DateTime.now(),
-          ),
-        );
-        spending[person] = (spending[person] ?? 0) + gift.value;
+        final name = peopleMap[gift.personId]?.name ?? 'Unknown';
+        spending[name] = (spending[name] ?? 0) + gift.value;
       }
     }
 
@@ -125,31 +117,43 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
   }
 
   Widget _buildEmptyState(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.bar_chart, size: 80, color: Colors.grey[400]),
+          Icon(Icons.bar_chart, size: 80, color: colors.onSurfaceVariant),
           const SizedBox(height: 24),
           Text(
             'No data to analyze',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: Colors.grey[600],
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(color: colors.onSurfaceVariant),
           ),
           const SizedBox(height: 8),
           Text(
             'Start logging gifts to see your spending',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Colors.grey[500],
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: colors.onSurfaceVariant),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildOverallStats(BuildContext context, double totalSpent, double totalReceived) {
+  Widget _buildOverallStats(
+    BuildContext context,
+    double totalSpent,
+    double totalReceived,
+    String title,
+  ) {
+    final colors = Theme.of(context).colorScheme;
+    final netBalance = totalReceived - totalSpent;
+    final balanceColor = netBalance == 0
+        ? colors.outline
+        : (netBalance > 0 ? colors.tertiary : colors.error);
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -157,10 +161,10 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Overall Spending',
+              title,
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: Colors.grey[700],
-                  ),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
             const SizedBox(height: 16),
             Row(
@@ -169,12 +173,12 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
                 _OverallStatItem(
                   label: 'Total Given',
                   value: '\$${totalSpent.toStringAsFixed(2)}',
-                  color: Colors.red,
+                  color: colors.error,
                 ),
                 _OverallStatItem(
                   label: 'Total Received',
                   value: '\$${totalReceived.toStringAsFixed(2)}',
-                  color: Colors.green,
+                  color: colors.tertiary,
                 ),
               ],
             ),
@@ -187,10 +191,10 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
                   style: TextStyle(fontWeight: FontWeight.w600, fontSize: 18),
                 ),
                 Text(
-                  '\$${(totalReceived - totalSpent).toStringAsFixed(2)}',
+                  '\$${netBalance.toStringAsFixed(2)}',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
-                    color: totalReceived > totalSpent ? Colors.green : Colors.red,
+                    color: balanceColor,
                     fontSize: 20,
                   ),
                 ),
@@ -222,8 +226,8 @@ class _OverallStatItem extends StatelessWidget {
         Text(
           label,
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Colors.grey[600],
-              ),
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
         ),
         const SizedBox(height: 4),
         Text(

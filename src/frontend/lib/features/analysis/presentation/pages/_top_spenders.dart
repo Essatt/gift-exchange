@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-import '../../../../models/person.dart';
 
 class TopSpenders extends StatelessWidget {
-  final Map<Person, double> spendingByPerson;
+  final Map<String, double> spendingByPerson;
 
   const TopSpenders({super.key, required this.spendingByPerson});
 
@@ -15,6 +14,8 @@ class TopSpenders extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
+    final maxAmount = sorted.first.value;
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -24,35 +25,49 @@ class TopSpenders extends StatelessWidget {
             Text(
               'Top Recipients',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: Colors.grey[700],
-                  ),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
             const SizedBox(height: 12),
             ...sorted.take(5).map((entry) {
-              final person = entry.key;
+              final name = entry.key;
               final amount = entry.value;
+              final fraction = maxAmount > 0 ? amount / maxAmount : 0.0;
+
               return Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            person.name,
-                            style: const TextStyle(fontWeight: FontWeight.w600),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          name,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        Text(
+                          '\$${amount.toStringAsFixed(2)}',
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.primary,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
                           ),
-                          Text(
-                            '\$${amount.toStringAsFixed(2)}',
-                            style: const TextStyle(
-                              color: Colors.orange,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 18,
-                            ),
-                          ),
-                        ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: fraction,
+                        minHeight: 8,
+                        backgroundColor: Theme.of(
+                          context,
+                        ).colorScheme.surfaceContainerHighest,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          Theme.of(context).colorScheme.primary,
+                        ),
                       ),
                     ),
                   ],

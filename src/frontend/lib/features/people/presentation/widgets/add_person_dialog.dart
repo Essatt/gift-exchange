@@ -36,7 +36,6 @@ class _AddPersonDialogState extends ConsumerState<AddPersonDialog> {
               controller: _nameController,
               decoration: const InputDecoration(
                 labelText: 'Name',
-                border: OutlineInputBorder(),
                 prefixIcon: Icon(Icons.person),
                 counterText: '',
               ),
@@ -57,7 +56,7 @@ class _AddPersonDialogState extends ConsumerState<AddPersonDialog> {
             const SizedBox(height: 8),
             DropdownButtonFormField<RelationshipType>(
               initialValue: _selectedRelationship,
-              decoration: const InputDecoration(border: OutlineInputBorder()),
+              decoration: const InputDecoration(),
               items: const [
                 DropdownMenuItem(
                   value: RelationshipType.family,

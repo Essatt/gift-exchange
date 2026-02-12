@@ -7,18 +7,40 @@ import '../../../../models/person.dart';
 import '../../../../providers/gift_providers.dart';
 import '../widgets/add_gift_dialog.dart';
 
-class PersonDetailPage extends ConsumerWidget {
+class PersonDetailPage extends ConsumerStatefulWidget {
   final Person person;
 
   const PersonDetailPage({super.key, required this.person});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final stats = ref.watch(personStatsProvider(person.id));
-    final gifts = ref.watch(giftsByPersonProvider(person.id));
+  ConsumerState<PersonDetailPage> createState() => _PersonDetailPageState();
+}
+
+class _PersonDetailPageState extends ConsumerState<PersonDetailPage> {
+  String _selectedTimeframe = 'overall';
+
+  void _onTimeframeChanged(String value) {
+    setState(() {
+      _selectedTimeframe = value;
+    });
+
+    final now = DateTime.now();
+    final TimeFilter filter = switch (value) {
+      'yearly' => TimeFilter.forYear(now.year),
+      'monthly' => TimeFilter.forMonth(year: now.year, month: now.month),
+      _ => TimeFilter.allTime,
+    };
+    ref.read(personDetailTimeFilterProvider(widget.person.id).notifier).state =
+        filter;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final stats = ref.watch(filteredPersonStatsProvider(widget.person.id));
+    final gifts = ref.watch(filteredGiftsByPersonProvider(widget.person.id));
 
     return Scaffold(
-      appBar: AppBar(title: Text(person.name), elevation: 0),
+      appBar: AppBar(title: Text(widget.person.name), elevation: 0),
       body: RefreshIndicator(
         onRefresh: () async {
           ref.read(refreshSignalProvider.notifier).state++;
@@ -26,6 +48,16 @@ class PersonDetailPage extends ConsumerWidget {
         child: CustomScrollView(
           slivers: [
             SliverToBoxAdapter(child: _buildBalanceCard(context, stats)),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: _TimeframeToggle(
+                  selected: _selectedTimeframe,
+                  onSelectionChanged: _onTimeframeChanged,
+                ),
+              ),
+            ),
+            const SliverToBoxAdapter(child: SizedBox(height: 8)),
             if (gifts.isEmpty)
               SliverFillRemaining(
                 hasScrollBody: false,
@@ -40,12 +72,27 @@ class PersonDetailPage extends ConsumerWidget {
                     return Dismissible(
                       key: ValueKey(gift.id),
                       direction: DismissDirection.endToStart,
-                      confirmDismiss: (_) => _confirmDismiss(context),
-                      onDismissed: (_) async {
-                        final service = ref.read(giftServiceProvider);
-                        await service.deleteGift(gift.id);
-                        ref.read(refreshSignalProvider.notifier).state++;
+                      confirmDismiss: (_) async {
+                        final confirmed = await _confirmDismiss(context);
+                        if (confirmed) {
+                          try {
+                            final service = ref.read(giftServiceProvider);
+                            await service.deleteGift(gift.id);
+                            ref.read(refreshSignalProvider.notifier).state++;
+                          } catch (e) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Failed to delete gift: $e'),
+                                ),
+                              );
+                            }
+                            return false;
+                          }
+                        }
+                        return confirmed;
                       },
+                      onDismissed: (_) {},
                       background: Container(
                         alignment: Alignment.centerRight,
                         padding: const EdgeInsets.only(right: 20),
@@ -71,7 +118,7 @@ class PersonDetailPage extends ConsumerWidget {
         onPressed: () {
           showDialog(
             context: context,
-            builder: (_) => AddGiftDialog(personId: person.id),
+            builder: (_) => AddGiftDialog(personId: widget.person.id),
           );
         },
         child: const Icon(Icons.add),
@@ -250,6 +297,43 @@ class PersonDetailPage extends ConsumerWidget {
           ),
         ) ??
         false;
+  }
+}
+
+class _TimeframeToggle extends StatelessWidget {
+  final String selected;
+  final Function(String) onSelectionChanged;
+
+  const _TimeframeToggle({
+    required this.selected,
+    required this.onSelectionChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SegmentedButton<String>(
+      segments: const [
+        ButtonSegment(
+          value: 'overall',
+          label: Text('All'),
+          icon: Icon(Icons.all_inclusive),
+        ),
+        ButtonSegment(
+          value: 'yearly',
+          label: Text('Year'),
+          icon: Icon(Icons.calendar_today),
+        ),
+        ButtonSegment(
+          value: 'monthly',
+          label: Text('Month'),
+          icon: Icon(Icons.calendar_month),
+        ),
+      ],
+      selected: {selected},
+      onSelectionChanged: (Set<String> newSelection) {
+        onSelectionChanged(newSelection.first);
+      },
+    );
   }
 }
 

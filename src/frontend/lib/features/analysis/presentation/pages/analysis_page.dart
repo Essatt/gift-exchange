@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../../models/gift.dart';
 import '../../../../models/gift_type.dart';
-import '../../../../models/person.dart';
 import '../../../../providers/gift_providers.dart';
 import '_top_spenders.dart';
 
@@ -15,32 +13,36 @@ class AnalysisPage extends ConsumerStatefulWidget {
 
 class _AnalysisPageState extends ConsumerState<AnalysisPage> {
   String _selectedTimeframe = 'overall';
+  String _selectedView = 'person'; // 'person' or 'label'
 
   void _onTimeframeChanged(String value) {
     setState(() {
       _selectedTimeframe = value;
     });
+
+    final now = DateTime.now();
+    final TimeFilter filter = switch (value) {
+      'yearly' => TimeFilter.forYear(now.year),
+      'monthly' => TimeFilter.forMonth(year: now.year, month: now.month),
+      _ => TimeFilter.allTime,
+    };
+    ref.read(analysisTimeFilterProvider.notifier).state = filter;
   }
 
   @override
   Widget build(BuildContext context) {
-    final gifts = ref.watch(giftsProvider);
-    final peopleMap = ref.watch(peopleMapProvider);
+    final allGifts = ref.watch(giftsProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Analysis'), elevation: 0),
-      body: gifts.isEmpty
+      body: allGifts.isEmpty
           ? _buildEmptyState(context)
-          : _buildContent(context, gifts, peopleMap),
+          : _buildContent(context),
     );
   }
 
-  Widget _buildContent(
-    BuildContext context,
-    List<Gift> gifts,
-    Map<String, Person> peopleMap,
-  ) {
-    final filteredGifts = _filterGiftsByTimeframe(gifts);
+  Widget _buildContent(BuildContext context) {
+    final filteredGifts = ref.watch(filteredGiftsProvider);
 
     final totalSpent = filteredGifts
         .where((g) => g.type == GiftType.given)
@@ -48,11 +50,6 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
     final totalReceived = filteredGifts
         .where((g) => g.type == GiftType.received)
         .fold<double>(0, (sum, g) => sum + g.value);
-
-    final spendingByPerson = _calculateSpendingByPerson(
-      filteredGifts,
-      peopleMap,
-    );
 
     final timeframeLabel = switch (_selectedTimeframe) {
       'yearly' => "This Year's Spending",
@@ -79,41 +76,20 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
             onSelectionChanged: _onTimeframeChanged,
           ),
           const SizedBox(height: 16),
-          TopSpenders(spendingByPerson: spendingByPerson),
+          _ViewToggle(
+            selected: _selectedView,
+            onSelectionChanged: (value) {
+              setState(() => _selectedView = value);
+            },
+          ),
+          const SizedBox(height: 16),
+          if (_selectedView == 'person')
+            const TopSpenders()
+          else
+            const LabelBalanceList(),
         ],
       ),
     );
-  }
-
-  List<Gift> _filterGiftsByTimeframe(List<Gift> gifts) {
-    final now = DateTime.now();
-
-    switch (_selectedTimeframe) {
-      case 'yearly':
-        return gifts.where((g) => g.date.year == now.year).toList();
-      case 'monthly':
-        return gifts
-            .where((g) => g.date.year == now.year && g.date.month == now.month)
-            .toList();
-      default:
-        return gifts;
-    }
-  }
-
-  Map<String, double> _calculateSpendingByPerson(
-    List<Gift> gifts,
-    Map<String, Person> peopleMap,
-  ) {
-    final Map<String, double> spending = {};
-
-    for (final gift in gifts) {
-      if (gift.type == GiftType.given) {
-        final name = peopleMap[gift.personId]?.name ?? 'Unknown';
-        spending[name] = (spending[name] ?? 0) + gift.value;
-      }
-    }
-
-    return spending;
   }
 
   Widget _buildEmptyState(BuildContext context) {
@@ -270,6 +246,35 @@ class _TimeframeToggle extends StatelessWidget {
           value: 'monthly',
           label: Text('Monthly'),
           icon: Icon(Icons.calendar_month),
+        ),
+      ],
+      selected: {selected},
+      onSelectionChanged: (Set<String> newSelection) {
+        onSelectionChanged(newSelection.first);
+      },
+    );
+  }
+}
+
+class _ViewToggle extends StatelessWidget {
+  final String selected;
+  final Function(String) onSelectionChanged;
+
+  const _ViewToggle({required this.selected, required this.onSelectionChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return SegmentedButton<String>(
+      segments: const [
+        ButtonSegment(
+          value: 'person',
+          label: Text('By Person'),
+          icon: Icon(Icons.person_outline),
+        ),
+        ButtonSegment(
+          value: 'label',
+          label: Text('By Label'),
+          icon: Icon(Icons.label_outline),
         ),
       ],
       selected: {selected},

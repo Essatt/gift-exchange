@@ -4,6 +4,8 @@ import '../../../../models/gift.dart';
 import '../../../../models/gift_type.dart';
 import '../../../../providers/gift_providers.dart';
 
+const String _addNewLabelSentinel = '__add_new_label__';
+
 class AddGiftDialog extends ConsumerStatefulWidget {
   final String personId;
 
@@ -24,17 +26,9 @@ class _AddGiftDialogState extends ConsumerState<AddGiftDialog> {
   };
 
   String selectedType = 'Given';
-  String selectedEventType = 'Birthday';
+  String? _selectedEventType;
   DateTime selectedDate = DateTime.now();
   bool _isSaving = false;
-  static const List<String> eventTypes = [
-    'Birthday',
-    'Wedding',
-    'Housewarming',
-    'Holiday',
-    'Anniversary',
-    'Custom',
-  ];
 
   static const List<int> quickValues = [10, 25, 50, 100, 200];
 
@@ -47,15 +41,17 @@ class _AddGiftDialogState extends ConsumerState<AddGiftDialog> {
 
   Future<void> _handleSave() async {
     if (_isSaving) return;
-    if (_formKey.currentState!.validate()) {
-      setState(() => _isSaving = true);
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isSaving = true);
+    try {
       final gift = Gift(
         id: '',
         personId: widget.personId,
         type: selectedType == 'Given' ? GiftType.given : GiftType.received,
-        value: double.parse(valueController.text),
+        value: double.tryParse(valueController.text) ?? 0,
         description: descriptionController.text.trim(),
-        eventType: selectedEventType,
+        eventType: _selectedEventType ?? 'Birthday',
         date: selectedDate,
         createdAt: DateTime.now(),
       );
@@ -67,11 +63,81 @@ class _AddGiftDialogState extends ConsumerState<AddGiftDialog> {
       if (mounted) {
         Navigator.of(context).pop(gift);
       }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to save gift: $e')));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
+  }
+
+  Future<void> _showAddLabelDialog() async {
+    final controller = TextEditingController();
+    final newLabel = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('New Event Label'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          textCapitalization: TextCapitalization.words,
+          maxLength: 50,
+          decoration: const InputDecoration(
+            hintText: 'e.g., Graduation, Baby Shower',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final text = controller.text.trim();
+              if (text.isNotEmpty) {
+                Navigator.pop(ctx, text);
+              }
+            },
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+
+    if (newLabel != null && newLabel.isNotEmpty) {
+      try {
+        final service = ref.read(giftServiceProvider);
+        await service.addCustomLabel(newLabel);
+        ref.read(refreshSignalProvider.notifier).state++;
+        setState(() {
+          _selectedEventType = newLabel;
+        });
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Failed to add label: $e')));
+        }
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final eventLabels = ref.watch(eventLabelsProvider);
+
+    // Ensure _selectedEventType is valid without mutating state in build
+    final effectiveEventType =
+        (_selectedEventType != null && eventLabels.contains(_selectedEventType))
+        ? _selectedEventType
+        : (eventLabels.isNotEmpty ? eventLabels.first : 'Birthday');
+
     return AlertDialog(
       title: const Text('Add Gift'),
       content: ConstrainedBox(
@@ -102,28 +168,51 @@ class _AddGiftDialogState extends ConsumerState<AddGiftDialog> {
                 ),
                 const SizedBox(height: 24),
                 DropdownButtonFormField<String>(
-                  initialValue: selectedEventType,
-                  decoration: const InputDecoration(
-                    labelText: 'Event Type',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: eventTypes
-                      .map(
-                        (String type) => DropdownMenuItem<String>(
-                          value: type,
-                          child: Text(type),
-                        ),
-                      )
-                      .toList(),
+                  initialValue: effectiveEventType,
+                  decoration: const InputDecoration(labelText: 'Event Type'),
+                  items: [
+                    ...eventLabels.map(
+                      (String type) => DropdownMenuItem<String>(
+                        value: type,
+                        child: Text(type),
+                      ),
+                    ),
+                    DropdownMenuItem<String>(
+                      value: _addNewLabelSentinel,
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.add_circle_outline,
+                            size: 18,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Add new label...',
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.primary,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   onChanged: (String? newValue) {
+                    if (newValue == _addNewLabelSentinel) {
+                      _showAddLabelDialog();
+                      return;
+                    }
                     if (newValue != null) {
                       setState(() {
-                        selectedEventType = newValue;
+                        _selectedEventType = newValue;
                       });
                     }
                   },
                   validator: (value) =>
-                      value == null ? 'Please select an event type' : null,
+                      value == null || value == _addNewLabelSentinel
+                      ? 'Please select an event type'
+                      : null,
                 ),
                 const SizedBox(height: 24),
                 InkWell(
@@ -143,7 +232,6 @@ class _AddGiftDialogState extends ConsumerState<AddGiftDialog> {
                   child: InputDecorator(
                     decoration: const InputDecoration(
                       labelText: 'Date',
-                      border: OutlineInputBorder(),
                       suffixIcon: Icon(Icons.calendar_today),
                     ),
                     child: Text(
@@ -158,7 +246,6 @@ class _AddGiftDialogState extends ConsumerState<AddGiftDialog> {
                   decoration: const InputDecoration(
                     labelText: 'Description',
                     hintText: 'e.g., Watch, Cash Gift',
-                    border: OutlineInputBorder(),
                   ),
                   maxLength: 100,
                   buildCounter:
@@ -189,7 +276,6 @@ class _AddGiftDialogState extends ConsumerState<AddGiftDialog> {
                   decoration: const InputDecoration(
                     labelText: 'Value',
                     prefixText: r'$',
-                    border: OutlineInputBorder(),
                   ),
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {

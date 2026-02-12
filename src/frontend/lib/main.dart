@@ -28,28 +28,136 @@ Future<List<int>> _getEncryptionKey() async {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Hive.initFlutter();
+  try {
+    await Hive.initFlutter();
 
-  if (!Hive.isAdapterRegistered(RelationshipTypeAdapter().typeId)) {
-    Hive.registerAdapter(RelationshipTypeAdapter());
-  }
-  if (!Hive.isAdapterRegistered(GiftTypeAdapter().typeId)) {
-    Hive.registerAdapter(GiftTypeAdapter());
-  }
-  if (!Hive.isAdapterRegistered(PersonAdapter().typeId)) {
-    Hive.registerAdapter(PersonAdapter());
-  }
-  if (!Hive.isAdapterRegistered(GiftAdapter().typeId)) {
-    Hive.registerAdapter(GiftAdapter());
-  }
+    if (!Hive.isAdapterRegistered(RelationshipTypeAdapter().typeId)) {
+      Hive.registerAdapter(RelationshipTypeAdapter());
+    }
+    if (!Hive.isAdapterRegistered(GiftTypeAdapter().typeId)) {
+      Hive.registerAdapter(GiftTypeAdapter());
+    }
+    if (!Hive.isAdapterRegistered(PersonAdapter().typeId)) {
+      Hive.registerAdapter(PersonAdapter());
+    }
+    if (!Hive.isAdapterRegistered(GiftAdapter().typeId)) {
+      Hive.registerAdapter(GiftAdapter());
+    }
 
-  final encryptionKey = await _getEncryptionKey();
-  final cipher = HiveAesCipher(encryptionKey);
+    final encryptionKey = await _getEncryptionKey();
+    final cipher = HiveAesCipher(encryptionKey);
 
-  await Hive.openBox<Person>('people', encryptionCipher: cipher);
-  await Hive.openBox<Gift>('gifts', encryptionCipher: cipher);
+    await Hive.openBox<Person>('people', encryptionCipher: cipher);
+    await Hive.openBox<Gift>('gifts', encryptionCipher: cipher);
+    await Hive.openBox<String>('custom_event_labels', encryptionCipher: cipher);
 
-  runApp(const ProviderScope(child: GiftExchangeApp()));
+    runApp(const ProviderScope(child: GiftExchangeApp()));
+  } catch (e) {
+    runApp(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Text(
+                'Failed to initialize app. Please restart.\n\nError: $e',
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+ThemeData _buildTheme(ColorScheme colorScheme) {
+  return ThemeData(
+    useMaterial3: true,
+    colorScheme: colorScheme,
+    appBarTheme: const AppBarTheme(
+      centerTitle: true,
+      elevation: 0,
+      backgroundColor: Colors.transparent,
+    ),
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true,
+      fillColor: colorScheme.surfaceContainerLow,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: colorScheme.outlineVariant),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: colorScheme.outlineVariant),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: colorScheme.primary, width: 1.5),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: colorScheme.error),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: colorScheme.error, width: 1.5),
+      ),
+    ),
+    dialogTheme: DialogThemeData(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+    ),
+    filledButtonTheme: FilledButtonThemeData(
+      style: FilledButton.styleFrom(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+        textStyle: const TextStyle(fontWeight: FontWeight.w600),
+      ),
+    ),
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      ),
+    ),
+    chipTheme: ChipThemeData(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+        side: BorderSide(color: colorScheme.outlineVariant),
+      ),
+    ),
+    segmentedButtonTheme: SegmentedButtonThemeData(
+      style: ButtonStyle(
+        shape: WidgetStatePropertyAll(
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      ),
+    ),
+    cardTheme: CardThemeData(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: colorScheme.outlineVariant, width: 0.5),
+      ),
+    ),
+    snackBarTheme: SnackBarThemeData(
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    ),
+    navigationBarTheme: NavigationBarThemeData(
+      height: 72,
+      indicatorShape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+    ),
+    floatingActionButtonTheme: FloatingActionButtonThemeData(
+      backgroundColor: colorScheme.primary,
+      foregroundColor: colorScheme.onPrimary,
+      elevation: 4,
+      shape: const CircleBorder(),
+    ),
+  );
 }
 
 class GiftExchangeApp extends StatelessWidget {
@@ -60,50 +168,16 @@ class GiftExchangeApp extends StatelessWidget {
     return MaterialApp(
       title: 'Gift Exchange',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
+      theme: _buildTheme(
+        ColorScheme.fromSeed(
           seedColor: const Color(0xFF6750A4),
           brightness: Brightness.light,
         ),
-        appBarTheme: const AppBarTheme(
-          centerTitle: true,
-          elevation: 0,
-          backgroundColor: Colors.transparent,
-        ),
-        cardTheme: CardThemeData(
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-        ),
-        floatingActionButtonTheme: const FloatingActionButtonThemeData(
-          backgroundColor: Color(0xFF6750A4),
-          foregroundColor: Colors.white,
-          elevation: 4,
-          shape: CircleBorder(),
-        ),
       ),
-      darkTheme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
+      darkTheme: _buildTheme(
+        ColorScheme.fromSeed(
           seedColor: const Color(0xFF6750A4),
           brightness: Brightness.dark,
-        ),
-        appBarTheme: const AppBarTheme(
-          centerTitle: true,
-          elevation: 0,
-          backgroundColor: Colors.transparent,
-        ),
-        cardTheme: CardThemeData(
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-        ),
-        floatingActionButtonTheme: const FloatingActionButtonThemeData(
-          elevation: 4,
-          shape: CircleBorder(),
         ),
       ),
       home: const MainScreen(),
@@ -138,7 +212,6 @@ class _MainScreenState extends State<MainScreen> {
     return Scaffold(
       body: IndexedStack(index: _selectedIndex, children: _pages),
       bottomNavigationBar: NavigationBar(
-        height: 80,
         selectedIndex: _selectedIndex,
         onDestinationSelected: _onItemTapped,
         destinations: const [

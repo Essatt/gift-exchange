@@ -12,4 +12,6 @@ enum RelationshipType {
   colleague,
   @HiveField(3)
   other,
+  @HiveField(4)
+  romanticPartner,
 }

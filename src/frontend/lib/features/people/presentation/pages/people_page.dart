@@ -31,6 +31,15 @@ class PeoplePage extends ConsumerWidget {
                       ),
                     );
                   },
+                  onEdit: () async {
+                    final result = await showDialog<bool>(
+                      context: context,
+                      builder: (_) => AddPersonDialog(existingPerson: person),
+                    );
+                    if (result == true) {
+                      ref.read(refreshSignalProvider.notifier).state++;
+                    }
+                  },
                   onDelete: () => _confirmDeletePerson(context, ref, person),
                 );
               },
@@ -117,11 +126,13 @@ class PeoplePage extends ConsumerWidget {
 class _PersonCard extends StatelessWidget {
   final Person person;
   final VoidCallback onTap;
+  final VoidCallback onEdit;
   final VoidCallback onDelete;
 
   const _PersonCard({
     required this.person,
     required this.onTap,
+    required this.onEdit,
     required this.onDelete,
   });
 
@@ -151,7 +162,7 @@ class _PersonCard extends StatelessWidget {
           style: const TextStyle(fontWeight: FontWeight.w600),
         ),
         subtitle: Text(
-          _getRelationshipLabel(person.relationship),
+          person.relationshipLabel,
           style: TextStyle(
             color: Theme.of(context).colorScheme.onSurfaceVariant,
             fontSize: 12,
@@ -159,9 +170,20 @@ class _PersonCard extends StatelessWidget {
         ),
         trailing: PopupMenuButton<String>(
           onSelected: (value) {
+            if (value == 'edit') onEdit();
             if (value == 'delete') onDelete();
           },
           itemBuilder: (context) => [
+            const PopupMenuItem(
+              value: 'edit',
+              child: Row(
+                children: [
+                  Icon(Icons.edit_outlined, size: 20),
+                  SizedBox(width: 8),
+                  Text('Edit'),
+                ],
+              ),
+            ),
             PopupMenuItem(
               value: 'delete',
               child: Row(
@@ -194,23 +216,12 @@ class _PersonCard extends StatelessWidget {
         return Colors.purple;
       case RelationshipType.friend:
         return Colors.blue;
+      case RelationshipType.romanticPartner:
+        return Colors.pink;
       case RelationshipType.colleague:
         return Colors.orange;
       case RelationshipType.other:
-        return Colors.grey;
-    }
-  }
-
-  String _getRelationshipLabel(RelationshipType type) {
-    switch (type) {
-      case RelationshipType.family:
-        return 'Family';
-      case RelationshipType.friend:
-        return 'Friend';
-      case RelationshipType.colleague:
-        return 'Colleague';
-      case RelationshipType.other:
-        return 'Other';
+        return Colors.teal;
     }
   }
 }

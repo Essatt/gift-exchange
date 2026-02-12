@@ -22,13 +22,14 @@ class PersonAdapter extends TypeAdapter<Person> {
       relationship: fields[2] as RelationshipType,
       createdAt: fields[3] as DateTime,
       updatedAt: fields[4] as DateTime,
+      customRelationship: (fields[5] as String?) ?? '',
     );
   }
 
   @override
   void write(BinaryWriter writer, Person obj) {
     writer
-      ..writeByte(5)
+      ..writeByte(6)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -38,7 +39,9 @@ class PersonAdapter extends TypeAdapter<Person> {
       ..writeByte(3)
       ..write(obj.createdAt)
       ..writeByte(4)
-      ..write(obj.updatedAt);
+      ..write(obj.updatedAt)
+      ..writeByte(5)
+      ..write(obj.customRelationship);
   }
 
   @override

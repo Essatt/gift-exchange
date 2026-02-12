@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import '../../../../models/gift.dart';
 import '../../../../models/gift_type.dart';
 import '../../../../providers/gift_providers.dart';
 
-const String _addNewLabelSentinel = '__add_new_label__';
-
 class AddGiftDialog extends ConsumerStatefulWidget {
   final String personId;
+  final Gift? existingGift;
 
-  const AddGiftDialog({super.key, required this.personId});
+  const AddGiftDialog({super.key, required this.personId, this.existingGift});
 
   @override
   ConsumerState<AddGiftDialog> createState() => _AddGiftDialogState();
@@ -20,17 +20,27 @@ class _AddGiftDialogState extends ConsumerState<AddGiftDialog> {
   final TextEditingController descriptionController = TextEditingController();
   final TextEditingController valueController = TextEditingController();
 
-  static const Map<String, IconData> typeSegments = {
-    'Given': Icons.call_made,
-    'Received': Icons.call_received,
-  };
-
   String selectedType = 'Given';
   String? _selectedEventType;
   DateTime selectedDate = DateTime.now();
   bool _isSaving = false;
 
+  bool get _isEditing => widget.existingGift != null;
+
   static const List<int> quickValues = [10, 25, 50, 100, 200];
+
+  @override
+  void initState() {
+    super.initState();
+    final gift = widget.existingGift;
+    if (gift != null) {
+      descriptionController.text = gift.description;
+      valueController.text = gift.value.toString();
+      selectedType = gift.type == GiftType.given ? 'Given' : 'Received';
+      _selectedEventType = gift.eventType;
+      selectedDate = gift.date;
+    }
+  }
 
   @override
   void dispose() {
@@ -45,29 +55,51 @@ class _AddGiftDialogState extends ConsumerState<AddGiftDialog> {
 
     setState(() => _isSaving = true);
     try {
-      final gift = Gift(
-        id: '',
-        personId: widget.personId,
-        type: selectedType == 'Given' ? GiftType.given : GiftType.received,
-        value: double.tryParse(valueController.text) ?? 0,
-        description: descriptionController.text.trim(),
-        eventType: _selectedEventType ?? 'Birthday',
-        date: selectedDate,
-        createdAt: DateTime.now(),
-      );
-
       final service = ref.read(giftServiceProvider);
-      await service.addGift(gift);
+      final giftType = selectedType == 'Given'
+          ? GiftType.given
+          : GiftType.received;
+      final value = double.tryParse(valueController.text) ?? 0;
+      final description = descriptionController.text.trim();
+      final eventType = _selectedEventType ?? 'Birthday';
+
+      if (_isEditing) {
+        final updated = widget.existingGift!.copyWith(
+          type: giftType,
+          value: value,
+          description: description,
+          eventType: eventType,
+          date: selectedDate,
+        );
+        await service.updateGift(updated);
+      } else {
+        final gift = Gift(
+          id: '',
+          personId: widget.personId,
+          type: giftType,
+          value: value,
+          description: description,
+          eventType: eventType,
+          date: selectedDate,
+          createdAt: DateTime.now(),
+        );
+        await service.addGift(gift);
+      }
+
       ref.read(refreshSignalProvider.notifier).state++;
 
       if (mounted) {
-        Navigator.of(context).pop(gift);
+        Navigator.of(context).pop(true);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to save gift: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Failed to ${_isEditing ? 'update' : 'save'} gift: $e',
+            ),
+          ),
+        );
       }
     } finally {
       if (mounted) {
@@ -89,6 +121,7 @@ class _AddGiftDialogState extends ConsumerState<AddGiftDialog> {
           maxLength: 50,
           decoration: const InputDecoration(
             hintText: 'e.g., Graduation, Baby Shower',
+            prefixIcon: Icon(Icons.label_outline),
           ),
         ),
         actions: [
@@ -130,16 +163,16 @@ class _AddGiftDialogState extends ConsumerState<AddGiftDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     final eventLabels = ref.watch(eventLabelsProvider);
 
-    // Ensure _selectedEventType is valid without mutating state in build
     final effectiveEventType =
         (_selectedEventType != null && eventLabels.contains(_selectedEventType))
-        ? _selectedEventType
+        ? _selectedEventType!
         : (eventLabels.isNotEmpty ? eventLabels.first : 'Birthday');
 
     return AlertDialog(
-      title: const Text('Add Gift'),
+      title: Text(_isEditing ? 'Edit Gift' : 'Add Gift'),
       content: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 400),
         child: SingleChildScrollView(
@@ -147,75 +180,78 @@ class _AddGiftDialogState extends ConsumerState<AddGiftDialog> {
             key: _formKey,
             child: Column(
               mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                SegmentedButton<String>(
-                  segments: typeSegments.entries
-                      .map(
-                        (entry) => ButtonSegment<String>(
-                          value: entry.key,
-                          label: Text(entry.key),
-                          icon: Icon(entry.value),
-                        ),
-                      )
-                      .toList(),
-                  selected: {selectedType},
-                  onSelectionChanged: (Set<String> newSelection) {
-                    setState(() {
-                      selectedType = newSelection.first;
-                    });
-                  },
-                ),
-                const SizedBox(height: 24),
-                DropdownButtonFormField<String>(
-                  initialValue: effectiveEventType,
-                  decoration: const InputDecoration(labelText: 'Event Type'),
-                  items: [
-                    ...eventLabels.map(
-                      (String type) => DropdownMenuItem<String>(
-                        value: type,
-                        child: Text(type),
+                // Direction toggle
+                Row(
+                  children: [
+                    Expanded(
+                      child: _DirectionCard(
+                        label: 'Given',
+                        icon: Icons.call_made,
+                        color: colors.error,
+                        isSelected: selectedType == 'Given',
+                        onTap: () => setState(() => selectedType = 'Given'),
                       ),
                     ),
-                    DropdownMenuItem<String>(
-                      value: _addNewLabelSentinel,
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.add_circle_outline,
-                            size: 18,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Add new label...',
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.primary,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _DirectionCard(
+                        label: 'Received',
+                        icon: Icons.call_received,
+                        color: colors.tertiary,
+                        isSelected: selectedType == 'Received',
+                        onTap: () => setState(() => selectedType = 'Received'),
                       ),
                     ),
                   ],
-                  onChanged: (String? newValue) {
-                    if (newValue == _addNewLabelSentinel) {
-                      _showAddLabelDialog();
-                      return;
-                    }
-                    if (newValue != null) {
-                      setState(() {
-                        _selectedEventType = newValue;
-                      });
-                    }
-                  },
-                  validator: (value) =>
-                      value == null || value == _addNewLabelSentinel
-                      ? 'Please select an event type'
-                      : null,
                 ),
-                const SizedBox(height: 24),
-                InkWell(
+                const SizedBox(height: 20),
+
+                // Event type chips
+                Text(
+                  'Event',
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: colors.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    ...eventLabels.map((label) {
+                      final isSelected = effectiveEventType == label;
+                      return ChoiceChip(
+                        label: Text(label),
+                        selected: isSelected,
+                        onSelected: (selected) {
+                          if (selected) {
+                            setState(() => _selectedEventType = label);
+                          }
+                        },
+                        selectedColor: colors.secondaryContainer,
+                        showCheckmark: false,
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        visualDensity: VisualDensity.compact,
+                      );
+                    }),
+                    ActionChip(
+                      avatar: Icon(Icons.add, size: 16, color: colors.primary),
+                      label: Text(
+                        'New',
+                        style: TextStyle(color: colors.primary),
+                      ),
+                      onPressed: _showAddLabelDialog,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+
+                // Date picker
+                GestureDetector(
                   onTap: () async {
                     final picked = await showDatePicker(
                       context: context,
@@ -224,42 +260,32 @@ class _AddGiftDialogState extends ConsumerState<AddGiftDialog> {
                       lastDate: DateTime.now(),
                     );
                     if (picked != null) {
-                      setState(() {
-                        selectedDate = picked;
-                      });
+                      setState(() => selectedDate = picked);
                     }
                   },
                   child: InputDecorator(
                     decoration: const InputDecoration(
                       labelText: 'Date',
-                      suffixIcon: Icon(Icons.calendar_today),
+                      prefixIcon: Icon(Icons.calendar_today_outlined),
                     ),
                     child: Text(
-                      '${selectedDate.day}/${selectedDate.month}/${selectedDate.year}',
-                      style: const TextStyle(fontSize: 16),
+                      DateFormat.yMMMd().format(selectedDate),
+                      style: Theme.of(context).textTheme.bodyLarge,
                     ),
                   ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
+
+                // Description
                 TextFormField(
                   controller: descriptionController,
                   decoration: const InputDecoration(
                     labelText: 'Description',
                     hintText: 'e.g., Watch, Cash Gift',
+                    prefixIcon: Icon(Icons.description_outlined),
+                    counterText: '',
                   ),
                   maxLength: 100,
-                  buildCounter:
-                      (
-                        context, {
-                        required currentLength,
-                        required maxLength,
-                        required isFocused,
-                      }) {
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                          child: Text('$currentLength/$maxLength'),
-                        );
-                      },
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
                       return 'Please enter a description';
@@ -268,6 +294,8 @@ class _AddGiftDialogState extends ConsumerState<AddGiftDialog> {
                   },
                 ),
                 const SizedBox(height: 16),
+
+                // Value
                 TextFormField(
                   controller: valueController,
                   keyboardType: const TextInputType.numberWithOptions(
@@ -275,7 +303,7 @@ class _AddGiftDialogState extends ConsumerState<AddGiftDialog> {
                   ),
                   decoration: const InputDecoration(
                     labelText: 'Value',
-                    prefixText: r'$',
+                    prefixIcon: Icon(Icons.attach_money),
                   ),
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
@@ -292,11 +320,8 @@ class _AddGiftDialogState extends ConsumerState<AddGiftDialog> {
                   },
                 ),
                 const SizedBox(height: 12),
-                const Text(
-                  'Quick Values',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 8),
+
+                // Quick values
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
@@ -307,7 +332,7 @@ class _AddGiftDialogState extends ConsumerState<AddGiftDialog> {
                           onPressed: () {
                             valueController.text = val.toString();
                           },
-                          visualDensity: VisualDensity.adaptivePlatformDensity,
+                          visualDensity: VisualDensity.compact,
                         ),
                       )
                       .toList(),
@@ -322,17 +347,69 @@ class _AddGiftDialogState extends ConsumerState<AddGiftDialog> {
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
         ),
-        FilledButton(
+        FilledButton.icon(
           onPressed: _isSaving ? null : _handleSave,
-          child: _isSaving
+          icon: _isSaving
               ? const SizedBox(
                   width: 16,
                   height: 16,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
-              : const Text('Save'),
+              : const Icon(Icons.check, size: 18),
+          label: const Text('Save'),
         ),
       ],
+    );
+  }
+}
+
+class _DirectionCard extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final Color color;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _DirectionCard({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          color: isSelected ? color.withAlpha(20) : colors.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? color : colors.outlineVariant,
+            width: isSelected ? 2 : 1,
+          ),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: isSelected ? color : colors.onSurfaceVariant),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                color: isSelected ? color : colors.onSurfaceVariant,
+                fontSize: 13,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

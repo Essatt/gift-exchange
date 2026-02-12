@@ -5,6 +5,7 @@ import '../../../../models/gift.dart';
 import '../../../../models/gift_type.dart';
 import '../../../../models/person.dart';
 import '../../../../providers/gift_providers.dart';
+import '../../../people/presentation/widgets/add_gift_dialog.dart';
 
 class GiftExchangePage extends ConsumerWidget {
   const GiftExchangePage({super.key});
@@ -29,7 +30,36 @@ class GiftExchangePage extends ConsumerWidget {
         itemBuilder: (context, index) {
           final gift = sortedGifts[index];
           final person = peopleMap[gift.personId];
-          return _GiftCard(gift: gift, person: person);
+          return _GiftCard(
+            gift: gift,
+            person: person,
+            onEdit: () async {
+              final result = await showDialog<bool>(
+                context: context,
+                builder: (_) =>
+                    AddGiftDialog(personId: gift.personId, existingGift: gift),
+              );
+              if (result == true) {
+                ref.read(refreshSignalProvider.notifier).state++;
+              }
+            },
+            onDelete: () async {
+              final confirmed = await _confirmDelete(context);
+              if (confirmed) {
+                try {
+                  final service = ref.read(giftServiceProvider);
+                  await service.deleteGift(gift.id);
+                  ref.read(refreshSignalProvider.notifier).state++;
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Failed to delete: $e')),
+                    );
+                  }
+                }
+              }
+            },
+          );
         },
       ),
     );
@@ -60,17 +90,44 @@ class GiftExchangePage extends ConsumerWidget {
       ),
     );
   }
+
+  Future<bool> _confirmDelete(BuildContext context) async {
+    return await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('Delete Gift?'),
+            content: const Text('Are you sure you want to delete this gift?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                style: TextButton.styleFrom(
+                  foregroundColor: Theme.of(context).colorScheme.error,
+                ),
+                child: const Text('Delete'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+  }
 }
 
 class _GiftCard extends StatelessWidget {
   final Gift gift;
   final Person? person;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
 
-  const _GiftCard({required this.gift, required this.person});
-
-  String _formatDate(DateTime date) {
-    return DateFormat.yMMMd().format(date);
-  }
+  const _GiftCard({
+    required this.gift,
+    required this.person,
+    required this.onEdit,
+    required this.onDelete,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -81,46 +138,113 @@ class _GiftCard extends StatelessWidget {
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 12,
-        ),
-        leading: Container(
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(
-            color: color.withAlpha(25),
-            shape: BoxShape.circle,
-          ),
-          child: Icon(icon, color: color),
-        ),
-        title: Text(
-          person?.name ?? 'Unknown',
-          style: const TextStyle(fontWeight: FontWeight.w600),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              gift.description.isNotEmpty ? gift.description : gift.eventType,
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-            Text(
-              _formatDate(gift.date),
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                fontSize: 11,
+      child: InkWell(
+        onTap: onEdit,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: color.withAlpha(25),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, color: color),
               ),
-            ),
-          ],
-        ),
-        trailing: Text(
-          '\$${gift.value.toStringAsFixed(2)}',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: color,
-            fontSize: 16,
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      person?.name ?? 'Unknown',
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    Text(
+                      gift.description.isNotEmpty
+                          ? gift.description
+                          : gift.eventType,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w500,
+                        color: colors.onSurfaceVariant,
+                        fontSize: 13,
+                      ),
+                    ),
+                    Text(
+                      '${gift.eventType} \u2022 ${DateFormat.yMMMd().format(gift.date)}',
+                      style: TextStyle(
+                        color: colors.onSurfaceVariant,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    '\$${gift.value.toStringAsFixed(2)}',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: color,
+                      fontSize: 16,
+                    ),
+                  ),
+                  Text(
+                    isGiven ? 'Given' : 'Received',
+                    style: TextStyle(
+                      color: color,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 4),
+              PopupMenuButton<String>(
+                onSelected: (value) {
+                  if (value == 'edit') onEdit();
+                  if (value == 'delete') onDelete();
+                },
+                padding: EdgeInsets.zero,
+                iconSize: 20,
+                itemBuilder: (context) => [
+                  const PopupMenuItem(
+                    value: 'edit',
+                    child: Row(
+                      children: [
+                        Icon(Icons.edit_outlined, size: 18),
+                        SizedBox(width: 8),
+                        Text('Edit'),
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'delete',
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.delete_outline,
+                          size: 18,
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Delete',
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
       ),

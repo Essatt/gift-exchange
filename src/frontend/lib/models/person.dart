@@ -20,18 +20,37 @@ class Person extends HiveObject {
   @HiveField(4)
   final DateTime updatedAt;
 
+  @HiveField(5, defaultValue: '')
+  final String customRelationship;
+
   Person({
     required this.id,
     required this.name,
     required this.relationship,
     required this.createdAt,
     required this.updatedAt,
+    this.customRelationship = '',
   });
+
+  String get relationshipLabel {
+    if (relationship == RelationshipType.other &&
+        customRelationship.isNotEmpty) {
+      return customRelationship;
+    }
+    return switch (relationship) {
+      RelationshipType.family => 'Family',
+      RelationshipType.friend => 'Friend',
+      RelationshipType.colleague => 'Colleague',
+      RelationshipType.romanticPartner => 'Romantic Partner',
+      RelationshipType.other => 'Other',
+    };
+  }
 
   Person copyWith({
     String? id,
     String? name,
     RelationshipType? relationship,
+    String? customRelationship,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -39,6 +58,7 @@ class Person extends HiveObject {
       id: id ?? this.id,
       name: name ?? this.name,
       relationship: relationship ?? this.relationship,
+      customRelationship: customRelationship ?? this.customRelationship,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );

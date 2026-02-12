@@ -21,6 +21,8 @@ class RelationshipTypeAdapter extends TypeAdapter<RelationshipType> {
         return RelationshipType.colleague;
       case 3:
         return RelationshipType.other;
+      case 4:
+        return RelationshipType.romanticPartner;
       default:
         return RelationshipType.family;
     }
@@ -40,6 +42,9 @@ class RelationshipTypeAdapter extends TypeAdapter<RelationshipType> {
         break;
       case RelationshipType.other:
         writer.writeByte(3);
+        break;
+      case RelationshipType.romanticPartner:
+        writer.writeByte(4);
         break;
     }
   }

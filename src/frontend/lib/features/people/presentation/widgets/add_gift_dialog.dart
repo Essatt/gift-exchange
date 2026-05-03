@@ -82,6 +82,7 @@ class _AddGiftDialogState extends ConsumerState<AddGiftDialog> {
           eventType: eventType,
           date: selectedDate,
           createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
         );
         await service.addGift(gift);
       }

@@ -22,7 +22,7 @@ class PersonAdapter extends TypeAdapter<Person> {
       relationship: fields[2] as RelationshipType,
       createdAt: fields[3] as DateTime,
       updatedAt: fields[4] as DateTime,
-      customRelationship: (fields[5] as String?) ?? '',
+      customRelationship: fields[5] == null ? '' : fields[5] as String,
     );
   }
 

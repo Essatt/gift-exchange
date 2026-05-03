@@ -56,20 +56,41 @@ class _AddPersonDialogState extends ConsumerState<AddPersonDialog> {
     super.dispose();
   }
 
+  String _sanitizeName(String input) {
+    return input
+        .replaceAll(RegExp(r'[\x00-\x1F\x7F]'), '')
+        .trim();
+  }
+
   Future<void> _handleSave() async {
     if (_isSaving) return;
     if (!_formKey.currentState!.validate()) return;
 
+    final name = _sanitizeName(_nameController.text);
+    final service = ref.read(giftServiceProvider);
+
+    // Check for duplicate names (case-insensitive)
+    if (service.isNameDuplicate(
+      name,
+      excludeId: widget.existingPerson?.id,
+    )) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('A person with this name already exists')),
+        );
+      }
+      return;
+    }
+
     setState(() => _isSaving = true);
     try {
-      final service = ref.read(giftServiceProvider);
       final customRel = _selectedRelationship == RelationshipType.other
           ? _customRelController.text.trim()
           : '';
 
       if (_isEditing) {
         final updated = widget.existingPerson!.copyWith(
-          name: _nameController.text.trim(),
+          name: name,
           relationship: _selectedRelationship,
           customRelationship: customRel,
         );
@@ -77,7 +98,7 @@ class _AddPersonDialogState extends ConsumerState<AddPersonDialog> {
       } else {
         final person = Person(
           id: '',
-          name: _nameController.text.trim(),
+          name: name,
           relationship: _selectedRelationship,
           customRelationship: customRel,
           createdAt: DateTime.now(),

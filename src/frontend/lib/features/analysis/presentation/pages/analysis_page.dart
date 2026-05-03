@@ -1,7 +1,10 @@
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import '../../../../models/gift_type.dart';
 import '../../../../providers/gift_providers.dart';
+import '../../../../shared/widgets/timeframe_toggle.dart';
 import '_top_spenders.dart';
 
 class AnalysisPage extends ConsumerStatefulWidget {
@@ -34,11 +37,102 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
     final allGifts = ref.watch(giftsProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Analysis'), elevation: 0),
+      appBar: AppBar(
+        title: const Text('Analysis'),
+        elevation: 0,
+        actions: [
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert),
+            onSelected: (value) {
+              if (value == 'export') _exportData(context, ref);
+              if (value == 'import') _importData(context, ref);
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'export',
+                child: Row(
+                  children: [
+                    Icon(Icons.file_upload_outlined, size: 20),
+                    SizedBox(width: 8),
+                    Text('Export Backup'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'import',
+                child: Row(
+                  children: [
+                    Icon(Icons.file_download_outlined, size: 20),
+                    SizedBox(width: 8),
+                    Text('Import Backup'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
       body: allGifts.isEmpty
           ? _buildEmptyState(context)
           : _buildContent(context),
     );
+  }
+
+  Future<void> _exportData(BuildContext context, WidgetRef ref) async {
+    final service = ref.read(giftServiceProvider);
+    final json = service.exportToJson();
+    await Clipboard.setData(ClipboardData(text: json));
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Backup copied to clipboard. Save it somewhere safe!'),
+          duration: Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
+  Future<void> _importData(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Import Backup'),
+        content: const Text(
+          'This will ADD data from your backup. Existing data is preserved. Paste the backup JSON:',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Import'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    try {
+      final clipboard = await Clipboard.getData(Clipboard.kTextPlain);
+      if (clipboard?.text == null || clipboard!.text!.isEmpty) {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Clipboard is empty')),
+        );
+        return;
+      }
+      final service = ref.read(giftServiceProvider);
+      final result = await service.importFromJson(clipboard.text!);
+      ref.read(refreshSignalProvider.notifier).state++;
+      messenger.showSnackBar(SnackBar(content: Text(result)));
+    } catch (e) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Import failed. Check the JSON format.')),
+      );
+    }
   }
 
   Widget _buildContent(BuildContext context) {
@@ -71,7 +165,7 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
             timeframeLabel,
           ),
           const SizedBox(height: 16),
-          _TimeframeToggle(
+          TimeframeToggle(
             selected: _selectedTimeframe,
             onSelectionChanged: _onTimeframeChanged,
           ),
@@ -215,43 +309,6 @@ class _OverallStatItem extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _TimeframeToggle extends StatelessWidget {
-  final String selected;
-  final Function(String) onSelectionChanged;
-
-  const _TimeframeToggle({
-    required this.selected,
-    required this.onSelectionChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SegmentedButton<String>(
-      segments: const [
-        ButtonSegment(
-          value: 'overall',
-          label: Text('Overall'),
-          icon: Icon(Icons.all_inclusive),
-        ),
-        ButtonSegment(
-          value: 'yearly',
-          label: Text('Yearly'),
-          icon: Icon(Icons.calendar_today),
-        ),
-        ButtonSegment(
-          value: 'monthly',
-          label: Text('Monthly'),
-          icon: Icon(Icons.calendar_month),
-        ),
-      ],
-      selected: {selected},
-      onSelectionChanged: (Set<String> newSelection) {
-        onSelectionChanged(newSelection.first);
-      },
     );
   }
 }

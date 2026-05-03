@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../../../models/gift.dart';
 import '../../../../models/gift_type.dart';
 import '../../../../models/person.dart';
+import '../../../../shared/widgets/confirm_delete_dialog.dart';
 import '../../../../providers/gift_providers.dart';
 import '../../../people/presentation/widgets/add_gift_dialog.dart';
 
@@ -44,12 +45,33 @@ class GiftExchangePage extends ConsumerWidget {
               }
             },
             onDelete: () async {
-              final confirmed = await _confirmDelete(context);
+              final confirmed = await showConfirmDeleteDialog(
+                context,
+                title: 'Delete Gift?',
+                content: 'Are you sure you want to delete this gift?',
+              );
               if (confirmed) {
                 try {
                   final service = ref.read(giftServiceProvider);
                   await service.deleteGift(gift.id);
                   ref.read(refreshSignalProvider.notifier).state++;
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: const Text('Gift deleted'),
+                        duration: const Duration(seconds: 5),
+                        action: SnackBarAction(
+                          label: 'Undo',
+                          onPressed: () async {
+                            await service.undoDeleteGift();
+                            ref
+                                .read(refreshSignalProvider.notifier)
+                                .state++;
+                          },
+                        ),
+                      ),
+                    );
+                  }
                 } catch (e) {
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -91,29 +113,6 @@ class GiftExchangePage extends ConsumerWidget {
     );
   }
 
-  Future<bool> _confirmDelete(BuildContext context) async {
-    return await showDialog<bool>(
-          context: context,
-          builder: (dialogContext) => AlertDialog(
-            title: const Text('Delete Gift?'),
-            content: const Text('Are you sure you want to delete this gift?'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext, false),
-                child: const Text('Cancel'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext, true),
-                style: TextButton.styleFrom(
-                  foregroundColor: Theme.of(context).colorScheme.error,
-                ),
-                child: const Text('Delete'),
-              ),
-            ],
-          ),
-        ) ??
-        false;
-  }
 }
 
 class _GiftCard extends StatelessWidget {

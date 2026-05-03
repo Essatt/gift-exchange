@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
 import 'models/person.dart';
 import 'models/gift.dart';
@@ -29,6 +30,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   try {
+    await initializeDateFormatting();
     await Hive.initFlutter();
 
     if (!Hive.isAdapterRegistered(RelationshipTypeAdapter().typeId)) {
@@ -54,13 +56,13 @@ void main() async {
     runApp(const ProviderScope(child: GiftExchangeApp()));
   } catch (e) {
     runApp(
-      MaterialApp(
+      const MaterialApp(
         home: Scaffold(
           body: Center(
             child: Padding(
-              padding: const EdgeInsets.all(32),
+              padding: EdgeInsets.all(32),
               child: Text(
-                'Failed to initialize app. Please restart.\n\nError: $e',
+                'Failed to initialize app. Please restart the app. If the problem persists, try reinstalling.',
                 textAlign: TextAlign.center,
               ),
             ),
@@ -223,7 +225,7 @@ class _MainScreenState extends State<MainScreen> {
           NavigationDestination(
             icon: Icon(Icons.card_giftcard_outlined),
             selectedIcon: Icon(Icons.card_giftcard_rounded),
-            label: 'Exchange',
+            label: 'History',
           ),
           NavigationDestination(
             icon: Icon(Icons.bar_chart_outlined),

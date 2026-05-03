@@ -1,48 +1,46 @@
-I understand your frustration with the repeated build failures, Esat. Let me take a different approach.
+# Gift Exchange
 
-**The Issue:**
-GLM-4.7 is struggling to generate the complex `main.dart` file properly with all the pages and imports wired together. Each generation attempt results in incomplete or broken code with 103+ compilation errors.
+Track gift exchanges with friends and family. Log gifts given and received, analyze spending patterns, and maintain balanced relationships.
 
-**My Recommendation:**
-Instead of relying on GLM to generate a complete, working file, let me:
-1. **Build the app step-by-step manually** (which I've been doing with individual pages)
-2. **Focus on fixing the remaining compilation errors one at a time**
-3. **Commit frequently to save progress**
+## Features
 
-**Current Status:**
-- ✅ All individual UI pages created and tested:
-  - `AddGiftDialog` - Complete
-  - `PersonDetailPage` - Complete
-  - `PeoplePage` - Complete
-  - `GiftExchangePage` - Complete
-  - `AnalysisPage` - Complete (last attempt)
-- ✅ Data models, services, and providers are in place
-- ❌ `main.dart` - Has 103+ errors (import issues, missing classes, etc.)
+- **People Management** — Add people with relationship types (family, friend, colleague, partner, or custom)
+- **Gift Tracking** — Log gifts given and received with event labels, descriptions, dates, and values
+- **Exchange History** — Browse all gift exchanges chronologically
+- **Spending Analysis** — View spending breakdowns by person and event label with yearly/monthly filters
+- **Balance Tracking** — See net balance (given vs. received) per person and overall
+- **Dark Mode** — Automatic light/dark theme based on system preference
+- **Local & Private** — All data stored encrypted on-device, no account required
 
-**What I've Done So Far:**
-1. Created folder structure for features/
-2. Built all 4 main feature pages with Material 3 design
-3. Built AddPersonDialog and AddGiftDialog
-4. Generated Hive adapters for all models
-5. Created GiftService with full CRUD operations
-6. Created Riverpod providers
-7. Set up proper imports in all files
+## Tech Stack
 
-**What Needs to Happen:**
-1. The `main.dart` file needs to be manually assembled with all imports and the `MainScreen` widget properly connected
-2. Run `flutter build web` to verify the app compiles
-3. Push working code to GitHub
+- Flutter 3.x + Dart 3.10
+- Riverpod (state management)
+- Hive (encrypted local storage)
+- Material 3 design system
 
-**Alternative Suggestion:**
-If you want me to continue using GLM, say "continue using GLM" and I'll keep trying different generation prompts. However, given the errors we're seeing, manual assembly would be faster and more reliable.
+## Getting Started
 
-**My Assessment:**
-The codebase structure is solid. All the individual components work. The issue is just integrating them into the main entry point. This is a common development pattern.
+```bash
+cd src/frontend
+flutter pub get
+flutter run
+```
 
-Do you want me to:
-1. **Continue trying with GLM** (different prompts)
-2. **Manually fix main.dart myself** (assemble from working components)
-3. **Run codex** (if you have it) to get a different AI's perspective
-4. **Something else?**
+## Project Structure
 
-Please let me know how you'd like to proceed. I'm ready to work on this!
+```
+lib/
+├── main.dart              # App entry point, theme, navigation
+├── models/                # Domain models (Person, Gift, enums, stats)
+├── services/              # GiftService — CRUD, labels, encryption
+├── providers/             # Riverpod providers for reactive data
+└── features/
+    ├── people/            # People list, person detail, add/edit dialogs
+    ├── gifts/             # Exchange history feed
+    └── analysis/          # Spending analysis & breakdowns
+```
+
+## License
+
+Proprietary. All rights reserved.

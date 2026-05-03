@@ -25,13 +25,14 @@ class GiftAdapter extends TypeAdapter<Gift> {
       eventType: fields[5] as String,
       description: fields[6] as String,
       createdAt: fields[7] as DateTime,
+      updatedAt: fields[8] as DateTime,
     );
   }
 
   @override
   void write(BinaryWriter writer, Gift obj) {
     writer
-      ..writeByte(8)
+      ..writeByte(9)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -47,7 +48,9 @@ class GiftAdapter extends TypeAdapter<Gift> {
       ..writeByte(6)
       ..write(obj.description)
       ..writeByte(7)
-      ..write(obj.createdAt);
+      ..write(obj.createdAt)
+      ..writeByte(8)
+      ..write(obj.updatedAt);
   }
 
   @override

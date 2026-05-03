@@ -3,15 +3,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../../models/gift.dart';
 import '../../../../models/gift_type.dart';
-import '../../../../models/person.dart';
 import '../../../../providers/gift_providers.dart';
+import '../../../../shared/widgets/timeframe_toggle.dart';
+import '../../../../shared/widgets/confirm_delete_dialog.dart';
 import '../widgets/add_gift_dialog.dart';
 import '../widgets/add_person_dialog.dart';
 
 class PersonDetailPage extends ConsumerStatefulWidget {
-  final Person person;
+  final String personId;
 
-  const PersonDetailPage({super.key, required this.person});
+  const PersonDetailPage({super.key, required this.personId});
 
   @override
   ConsumerState<PersonDetailPage> createState() => _PersonDetailPageState();
@@ -32,13 +33,14 @@ class _PersonDetailPageState extends ConsumerState<PersonDetailPage> {
       'monthly' => TimeFilter.forMonth(year: now.year, month: now.month),
       _ => TimeFilter.allTime,
     };
-    ref.read(personDetailTimeFilterProvider(widget.person.id).notifier).state =
+    ref.read(personDetailTimeFilterProvider(widget.personId).notifier).state =
         filter;
   }
 
   Future<void> _editPerson() async {
     final service = ref.read(giftServiceProvider);
-    final current = service.getPerson(widget.person.id) ?? widget.person;
+    final current = service.getPerson(widget.personId);
+    if (current == null) return;
     final result = await showDialog<bool>(
       context: context,
       builder: (_) => AddPersonDialog(existingPerson: current),
@@ -52,7 +54,7 @@ class _PersonDetailPageState extends ConsumerState<PersonDetailPage> {
     final result = await showDialog<bool>(
       context: context,
       builder: (_) =>
-          AddGiftDialog(personId: widget.person.id, existingGift: gift),
+          AddGiftDialog(personId: widget.personId, existingGift: gift),
     );
     if (result == true) {
       ref.read(refreshSignalProvider.notifier).state++;
@@ -61,15 +63,10 @@ class _PersonDetailPageState extends ConsumerState<PersonDetailPage> {
 
   @override
   Widget build(BuildContext context) {
-    final stats = ref.watch(filteredPersonStatsProvider(widget.person.id));
-    final gifts = ref.watch(filteredGiftsByPersonProvider(widget.person.id));
-    // Get live person data for the appbar title
-    final livePerson = ref
-        .watch(peopleProvider)
-        .where((p) => p.id == widget.person.id);
-    final personName = livePerson.isNotEmpty
-        ? livePerson.first.name
-        : widget.person.name;
+    final person = ref.watch(personProvider(widget.personId));
+    final stats = ref.watch(filteredPersonStatsProvider(widget.personId));
+    final gifts = ref.watch(filteredGiftsByPersonProvider(widget.personId));
+    final personName = person?.name ?? 'Unknown';
 
     // Group gifts by event type
     final eventGroups = <String, List<Gift>>{};
@@ -106,7 +103,7 @@ class _PersonDetailPageState extends ConsumerState<PersonDetailPage> {
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: _TimeframeToggle(
+                child: TimeframeToggle(
                   selected: _selectedTimeframe,
                   onSelectionChanged: _onTimeframeChanged,
                 ),
@@ -149,16 +146,39 @@ class _PersonDetailPageState extends ConsumerState<PersonDetailPage> {
                       },
                       onEditGift: _editGift,
                       onDeleteGift: (giftId) async {
-                        final confirmed = await _confirmDismiss(context);
+                        final confirmed = await showConfirmDeleteDialog(
+                          context,
+                          title: 'Delete Gift?',
+                          content:
+                              'Are you sure you want to delete this gift?',
+                        );
                         if (confirmed) {
                           try {
                             final service = ref.read(giftServiceProvider);
                             await service.deleteGift(giftId);
                             ref.read(refreshSignalProvider.notifier).state++;
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: const Text('Gift deleted'),
+                                  duration: const Duration(seconds: 5),
+                                  action: SnackBarAction(
+                                    label: 'Undo',
+                                    onPressed: () async {
+                                      await service.undoDeleteGift();
+                                      ref
+                                          .read(refreshSignalProvider.notifier)
+                                          .state++;
+                                    },
+                                  ),
+                                ),
+                              );
+                            }
                           } catch (e) {
                             if (context.mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Failed to delete: $e')),
+                                SnackBar(
+                                    content: Text('Failed to delete: $e')),
                               );
                             }
                           }
@@ -177,7 +197,7 @@ class _PersonDetailPageState extends ConsumerState<PersonDetailPage> {
         onPressed: () {
           showDialog(
             context: context,
-            builder: (_) => AddGiftDialog(personId: widget.person.id),
+            builder: (_) => AddGiftDialog(personId: widget.personId),
           );
         },
         child: const Icon(Icons.add),
@@ -334,29 +354,6 @@ class _PersonDetailPageState extends ConsumerState<PersonDetailPage> {
     );
   }
 
-  Future<bool> _confirmDismiss(BuildContext context) async {
-    return await showDialog<bool>(
-          context: context,
-          builder: (dialogContext) => AlertDialog(
-            title: const Text('Delete Gift?'),
-            content: const Text('Are you sure you want to delete this gift?'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext, false),
-                child: const Text('Cancel'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext, true),
-                style: TextButton.styleFrom(
-                  foregroundColor: Theme.of(context).colorScheme.error,
-                ),
-                child: const Text('Delete'),
-              ),
-            ],
-          ),
-        ) ??
-        false;
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -681,39 +678,3 @@ class _GiftRow extends StatelessWidget {
   }
 }
 
-class _TimeframeToggle extends StatelessWidget {
-  final String selected;
-  final Function(String) onSelectionChanged;
-
-  const _TimeframeToggle({
-    required this.selected,
-    required this.onSelectionChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SegmentedButton<String>(
-      segments: const [
-        ButtonSegment(
-          value: 'overall',
-          label: Text('All'),
-          icon: Icon(Icons.all_inclusive),
-        ),
-        ButtonSegment(
-          value: 'yearly',
-          label: Text('Year'),
-          icon: Icon(Icons.calendar_today),
-        ),
-        ButtonSegment(
-          value: 'monthly',
-          label: Text('Month'),
-          icon: Icon(Icons.calendar_month),
-        ),
-      ],
-      selected: {selected},
-      onSelectionChanged: (Set<String> newSelection) {
-        onSelectionChanged(newSelection.first);
-      },
-    );
-  }
-}

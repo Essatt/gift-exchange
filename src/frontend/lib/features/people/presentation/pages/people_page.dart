@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../models/person.dart';
 import '../../../../models/relationship_type.dart';
 import '../../../../providers/gift_providers.dart';
+import '../../../../shared/widgets/confirm_delete_dialog.dart';
 import '../widgets/add_person_dialog.dart';
 import 'person_detail_page.dart';
 
@@ -17,32 +18,67 @@ class PeoplePage extends ConsumerWidget {
       appBar: AppBar(title: const Text('People'), elevation: 0),
       body: people.isEmpty
           ? _buildEmptyState(context)
-          : ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: people.length,
-              itemBuilder: (context, index) {
-                final person = people[index];
-                return _PersonCard(
-                  person: person,
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => PersonDetailPage(person: person),
-                      ),
-                    );
-                  },
-                  onEdit: () async {
-                    final result = await showDialog<bool>(
-                      context: context,
-                      builder: (_) => AddPersonDialog(existingPerson: person),
-                    );
-                    if (result == true) {
-                      ref.read(refreshSignalProvider.notifier).state++;
-                    }
-                  },
-                  onDelete: () => _confirmDeletePerson(context, ref, person),
-                );
+          : RefreshIndicator(
+              onRefresh: () async {
+                ref.read(refreshSignalProvider.notifier).state++;
               },
+              child: ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: people.length,
+                itemBuilder: (context, index) {
+                  final person = people[index];
+                  return _PersonCard(
+                    person: person,
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              PersonDetailPage(personId: person.id),
+                        ),
+                      );
+                    },
+                    onEdit: () async {
+                      final result = await showDialog<bool>(
+                        context: context,
+                        builder: (_) =>
+                            AddPersonDialog(existingPerson: person),
+                      );
+                      if (result == true) {
+                        ref.read(refreshSignalProvider.notifier).state++;
+                      }
+                    },
+                    onDelete: () async {
+                      final messenger = ScaffoldMessenger.of(context);
+                      final confirmed = await showConfirmDeleteDialog(
+                        context,
+                        title: 'Delete Person?',
+                        content:
+                            'This will delete "${person.name}" and ALL their gifts. This cannot be undone.',
+                      );
+                      if (confirmed) {
+                        final service = ref.read(giftServiceProvider);
+                        await service.deletePerson(person.id);
+                        ref.read(refreshSignalProvider.notifier).state++;
+                        messenger.showSnackBar(
+                          SnackBar(
+                            content: Text('${person.name} deleted'),
+                            duration: const Duration(seconds: 5),
+                            action: SnackBarAction(
+                              label: 'Undo',
+                              onPressed: () async {
+                                await service.undoDeletePerson();
+                                ref
+                                    .read(refreshSignalProvider.notifier)
+                                    .state++;
+                              },
+                            ),
+                          ),
+                        );
+                      }
+                    },
+                  );
+                },
+              ),
             ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
@@ -80,47 +116,6 @@ class PeoplePage extends ConsumerWidget {
     );
   }
 
-  Future<void> _confirmDeletePerson(
-    BuildContext context,
-    WidgetRef ref,
-    Person person,
-  ) async {
-    final messenger = ScaffoldMessenger.of(context);
-    final errorColor = Theme.of(context).colorScheme.error;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Delete Person?'),
-        content: Text(
-          'This will delete "${person.name}" and ALL their gifts. This cannot be undone.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            style: TextButton.styleFrom(foregroundColor: errorColor),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true) {
-      final service = ref.read(giftServiceProvider);
-      await service.deletePerson(person.id);
-      ref.read(refreshSignalProvider.notifier).state++;
-
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text('${person.name} deleted'),
-          duration: const Duration(seconds: 2),
-        ),
-      );
-    }
-  }
 }
 
 class _PersonCard extends StatelessWidget {

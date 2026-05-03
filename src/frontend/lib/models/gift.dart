@@ -29,6 +29,9 @@ class Gift extends HiveObject {
   @HiveField(7)
   final DateTime createdAt;
 
+  @HiveField(8)
+  final DateTime updatedAt;
+
   Gift({
     required this.id,
     required this.personId,
@@ -38,7 +41,8 @@ class Gift extends HiveObject {
     required this.eventType,
     required this.description,
     required this.createdAt,
-  });
+    required this.updatedAt,
+  }) : assert(value > 0, 'Gift value must be positive');
 
   Gift copyWith({
     String? id,
@@ -49,6 +53,7 @@ class Gift extends HiveObject {
     String? eventType,
     String? description,
     DateTime? createdAt,
+    DateTime? updatedAt,
   }) {
     return Gift(
       id: id ?? this.id,
@@ -59,6 +64,7 @@ class Gift extends HiveObject {
       eventType: eventType ?? this.eventType,
       description: description ?? this.description,
       createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 

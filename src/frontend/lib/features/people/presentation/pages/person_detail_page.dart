@@ -8,6 +8,7 @@ import '../../../../shared/widgets/timeframe_toggle.dart';
 import '../../../../shared/widgets/confirm_delete_dialog.dart';
 import '../widgets/add_gift_dialog.dart';
 import '../widgets/add_person_dialog.dart';
+import '../../../../shared/format/currency.dart';
 
 class PersonDetailPage extends ConsumerStatefulWidget {
   final String personId;
@@ -153,19 +154,22 @@ class _PersonDetailPageState extends ConsumerState<PersonDetailPage> {
                               'Are you sure you want to delete this gift?',
                         );
                         if (confirmed) {
+                          final service = ref.read(giftServiceProvider);
                           try {
-                            final service = ref.read(giftServiceProvider);
                             await service.deleteGift(giftId);
                             ref.read(refreshSignalProvider.notifier).state++;
                             if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
+                              final messenger =
+                                  ScaffoldMessenger.of(context);
+                              messenger.hideCurrentSnackBar();
+                              messenger.showSnackBar(
                                 SnackBar(
                                   content: const Text('Gift deleted'),
                                   duration: const Duration(seconds: 5),
                                   action: SnackBarAction(
                                     label: 'Undo',
                                     onPressed: () async {
-                                      await service.undoDeleteGift();
+                                      await service.undoDeleteGift(giftId);
                                       ref
                                           .read(refreshSignalProvider.notifier)
                                           .state++;
@@ -243,7 +247,7 @@ class _PersonDetailPageState extends ConsumerState<PersonDetailPage> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '\$${stats.totalGiven.toStringAsFixed(2)}',
+                        formatCurrency(stats.totalGiven),
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           color: colors.error,
@@ -265,7 +269,7 @@ class _PersonDetailPageState extends ConsumerState<PersonDetailPage> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '\$${stats.totalReceived.toStringAsFixed(2)}',
+                        formatCurrency(stats.totalReceived),
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           color: colors.tertiary,
@@ -281,16 +285,23 @@ class _PersonDetailPageState extends ConsumerState<PersonDetailPage> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  'Net Balance',
-                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 18),
+                const Flexible(
+                  child: Text(
+                    'Net Balance',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 18),
+                  ),
                 ),
-                Text(
-                  '\$${stats.netBalance.toStringAsFixed(2)}',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: balanceColor,
-                    fontSize: 20,
+                Flexible(
+                  child: Text(
+                    formatCurrency(stats.netBalance),
+                    textAlign: TextAlign.end,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: balanceColor,
+                      fontSize: 20,
+                    ),
                   ),
                 ),
               ],
@@ -559,6 +570,8 @@ class _MiniStat extends StatelessWidget {
         const SizedBox(width: 4),
         Text(
           '\$${value.toStringAsFixed(0)}',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: TextStyle(
             color: color,
             fontWeight: FontWeight.w500,
@@ -649,7 +662,7 @@ class _GiftRow extends StatelessWidget {
               ),
             ),
             Text(
-              '\$${gift.value.toStringAsFixed(2)}',
+              formatCurrency(gift.value),
               style: TextStyle(
                 fontWeight: FontWeight.w600,
                 color: color,
@@ -663,13 +676,11 @@ class _GiftRow extends StatelessWidget {
               color: colors.onSurfaceVariant.withAlpha(120),
             ),
             const SizedBox(width: 4),
-            GestureDetector(
-              onTap: onDelete,
-              child: Icon(
-                Icons.close,
-                size: 16,
-                color: colors.onSurfaceVariant.withAlpha(120),
-              ),
+            IconButton(
+              icon: Icon(Icons.close, size: 18, color: colors.onSurfaceVariant.withAlpha(120)),
+              onPressed: onDelete,
+              tooltip: 'Delete gift',
+              visualDensity: VisualDensity.compact,
             ),
           ],
         ),
@@ -677,4 +688,3 @@ class _GiftRow extends StatelessWidget {
     );
   }
 }
-

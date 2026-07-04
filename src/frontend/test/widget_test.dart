@@ -1,4 +1,7 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:gift_exchange/shared/widgets/timeframe_toggle.dart';
+import 'package:gift_exchange/shared/format/currency.dart';
 import 'package:gift_exchange/models/person.dart';
 import 'package:gift_exchange/models/gift.dart';
 import 'package:gift_exchange/models/gift_type.dart';
@@ -11,6 +14,40 @@ import 'package:gift_exchange/services/gift_service.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
 void main() {
+  group('Responsive + formatting', () {
+    testWidgets(
+        'TimeframeToggle does not overflow on a 320dp screen at 3x text scale',
+        (tester) async {
+      tester.view.physicalSize = const Size(320, 640);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: MediaQuery(
+              data: const MediaQueryData(textScaler: TextScaler.linear(3.0)),
+              child: TimeframeToggle(
+                selected: 'overall',
+                onSelectionChanged: (_) {},
+              ),
+            ),
+          ),
+        ),
+      );
+      // A RenderFlex overflow would surface as a thrown FlutterError here.
+      expect(tester.takeException(), isNull);
+    });
+
+    test('formatCurrency places the sign before the symbol and groups', () {
+      expect(formatCurrency(1234.5), '\$1,234.50');
+      expect(formatCurrency(-1234.5), '-\$1,234.50');
+      expect(formatCurrency(double.nan), '\$0.00');
+      expect(formatCurrency(double.infinity), '\$0.00');
+    });
+  });
+
   group('Person model', () {
     test('creates with required fields', () {
       final now = DateTime.now();
@@ -257,7 +294,7 @@ void main() {
       await service.deletePerson('p1');
       expect(service.getPerson('p1'), null);
 
-      await service.undoDeletePerson();
+      await service.undoDeletePerson('p1');
       expect(service.getPerson('p1'), isNotNull);
       expect(service.getPerson('p1')?.name, 'Alice');
       expect(service.getGiftsByPersonId('p1').length, 1);
@@ -302,7 +339,7 @@ void main() {
       await service.deleteGift('g1');
       expect(service.getGift('g1'), null);
 
-      await service.undoDeleteGift();
+      await service.undoDeleteGift('g1');
       expect(service.getGift('g1'), isNotNull);
       expect(service.getGift('g1')?.value, 50.0);
     });
@@ -368,6 +405,143 @@ void main() {
       final gifts = service.getAllGifts();
       expect(gifts.length, 1);
       expect(gifts.first.value, 50.0);
+    });
+
+    test('undo restores the correct gift after consecutive deletes', () async {
+      final now = DateTime.now();
+      await service.addPerson(Person(
+        id: 'p1', name: 'Alice', relationship: RelationshipType.friend,
+        createdAt: now, updatedAt: now,
+      ));
+      for (final id in ['g1', 'g2']) {
+        await service.addGift(Gift(
+          id: id, personId: 'p1', type: GiftType.given,
+          value: 10.0, date: now, eventType: 'Birthday',
+          description: id, createdAt: now, updatedAt: now,
+        ));
+      }
+
+      // Delete both, then undo the FIRST one — must restore g1, not g2.
+      await service.deleteGift('g1');
+      await service.deleteGift('g2');
+      await service.undoDeleteGift('g1');
+
+      expect(service.getGift('g1'), isNotNull);
+      expect(service.getGift('g2'), null); // still deleted
+    });
+
+    test('import rejects malformed JSON without corrupting data', () async {
+      final now = DateTime.now();
+      await service.addPerson(Person(
+        id: 'keep', name: 'Existing', relationship: RelationshipType.friend,
+        createdAt: now, updatedAt: now,
+      ));
+
+      expect(
+        () => service.importFromJson('not json at all'),
+        throwsFormatException,
+      );
+      // Existing data untouched.
+      expect(service.getPerson('keep'), isNotNull);
+    });
+
+    test('import skips invalid records but imports valid ones', () async {
+      const json = '''
+      {
+        "version": 1,
+        "people": [
+          {"id": "ok", "name": "Valid", "relationship": "friend",
+           "createdAt": "2024-01-01T00:00:00.000", "updatedAt": "2024-01-01T00:00:00.000"},
+          {"id": "", "name": "NoId", "relationship": "friend",
+           "createdAt": "2024-01-01T00:00:00.000", "updatedAt": "2024-01-01T00:00:00.000"}
+        ],
+        "gifts": [
+          {"id": "gok", "personId": "ok", "type": "given", "value": 5.0,
+           "date": "2024-01-01T00:00:00.000", "eventType": "Birthday", "description": "",
+           "createdAt": "2024-01-01T00:00:00.000", "updatedAt": "2024-01-01T00:00:00.000"},
+          {"id": "gbad", "personId": "ok", "type": "given", "value": -5.0,
+           "date": "2024-01-01T00:00:00.000", "eventType": "Birthday", "description": "",
+           "createdAt": "2024-01-01T00:00:00.000", "updatedAt": "2024-01-01T00:00:00.000"}
+        ],
+        "customLabels": []
+      }
+      ''';
+      final result = await service.importFromJson(json);
+      expect(service.getPerson('ok'), isNotNull);
+      expect(service.getGift('gok'), isNotNull);
+      expect(service.getGift('gbad'), null); // negative value rejected
+      expect(result, contains('skipped'));
+    });
+
+    test('import rejects a newer backup version', () async {
+      const json =
+          '{"version": 999, "people": [], "gifts": [], "customLabels": []}';
+      expect(
+        () => service.importFromJson(json),
+        throwsFormatException,
+      );
+    });
+
+    test('import skips a record with a non-string optional field '
+        'without aborting the whole import', () async {
+      // "relationship": 123 (a number) previously threw an uncaught TypeError
+      // via `as String?`, aborting the entire import. It must now skip only
+      // that record and still import the valid one.
+      const json = '''
+      {
+        "version": 1,
+        "people": [
+          {"id": "bad", "name": "BadRel", "relationship": 123,
+           "createdAt": "2024-01-01T00:00:00.000", "updatedAt": "2024-01-01T00:00:00.000"},
+          {"id": "good", "name": "GoodRel", "relationship": "family",
+           "createdAt": "2024-01-01T00:00:00.000", "updatedAt": "2024-01-01T00:00:00.000"}
+        ],
+        "gifts": [],
+        "customLabels": []
+      }
+      ''';
+      final result = await service.importFromJson(json);
+      // "bad" record still imports (relationship falls back to friend) because
+      // the non-string optional field is coerced to null, not thrown on.
+      expect(service.getPerson('good'), isNotNull);
+      expect(service.getPerson('good')?.relationship,
+          RelationshipType.family);
+      expect(service.getPerson('bad'), isNotNull);
+      expect(service.getPerson('bad')?.relationship, RelationshipType.friend);
+      expect(result, contains('2 people'));
+    });
+
+    test('import drops orphan gifts referencing a missing person', () async {
+      const json = '''
+      {
+        "version": 1,
+        "people": [
+          {"id": "p1", "name": "Alice", "relationship": "friend",
+           "createdAt": "2024-01-01T00:00:00.000", "updatedAt": "2024-01-01T00:00:00.000"}
+        ],
+        "gifts": [
+          {"id": "gok", "personId": "p1", "type": "given", "value": 5.0,
+           "date": "2024-01-01T00:00:00.000", "eventType": "Birthday", "description": "",
+           "createdAt": "2024-01-01T00:00:00.000", "updatedAt": "2024-01-01T00:00:00.000"},
+          {"id": "gorphan", "personId": "ghost", "type": "given", "value": 5.0,
+           "date": "2024-01-01T00:00:00.000", "eventType": "Birthday", "description": "",
+           "createdAt": "2024-01-01T00:00:00.000", "updatedAt": "2024-01-01T00:00:00.000"}
+        ],
+        "customLabels": []
+      }
+      ''';
+      await service.importFromJson(json);
+      expect(service.getGift('gok'), isNotNull);
+      expect(service.getGift('gorphan'), null); // orphan dropped
+    });
+
+    test('import rejects a non-numeric backup version', () async {
+      const json =
+          '{"version": "abc", "people": [], "gifts": [], "customLabels": []}';
+      expect(
+        () => service.importFromJson(json),
+        throwsFormatException,
+      );
     });
   });
 }

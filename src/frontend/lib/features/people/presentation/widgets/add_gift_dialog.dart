@@ -53,15 +53,29 @@ class _AddGiftDialogState extends ConsumerState<AddGiftDialog> {
     if (_isSaving) return;
     if (!_formKey.currentState!.validate()) return;
 
+    // Guard: the form validator already enforces a positive finite value, but
+    // never persist a value that would violate the Gift(value > 0) invariant.
+    final parsedValue = double.tryParse(valueController.text.trim());
+    if (parsedValue == null || !parsedValue.isFinite || parsedValue <= 0) {
+      return;
+    }
+
     setState(() => _isSaving = true);
     try {
       final service = ref.read(giftServiceProvider);
       final giftType = selectedType == 'Given'
           ? GiftType.given
           : GiftType.received;
-      final value = double.tryParse(valueController.text) ?? 0;
+      final value = parsedValue;
       final description = descriptionController.text.trim();
-      final eventType = _selectedEventType ?? 'Birthday';
+      // Use the same value shown as selected in the UI (effectiveEventType),
+      // so the saved event type never diverges from the highlighted chip.
+      final labels = ref.read(eventLabelsProvider);
+      final eventType =
+          (_selectedEventType != null &&
+              labels.contains(_selectedEventType))
+          ? _selectedEventType!
+          : (labels.isNotEmpty ? labels.first : 'Birthday');
 
       if (_isEditing) {
         final updated = widget.existingGift!.copyWith(
@@ -148,6 +162,7 @@ class _AddGiftDialogState extends ConsumerState<AddGiftDialog> {
       try {
         final service = ref.read(giftServiceProvider);
         await service.addCustomLabel(newLabel);
+        if (!mounted) return;
         ref.read(refreshSignalProvider.notifier).state++;
         setState(() {
           _selectedEventType = newLabel;
@@ -233,7 +248,6 @@ class _AddGiftDialogState extends ConsumerState<AddGiftDialog> {
                         },
                         selectedColor: colors.secondaryContainer,
                         showCheckmark: false,
-                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         visualDensity: VisualDensity.compact,
                       );
                     }),
@@ -244,7 +258,6 @@ class _AddGiftDialogState extends ConsumerState<AddGiftDialog> {
                         style: TextStyle(color: colors.primary),
                       ),
                       onPressed: _showAddLabelDialog,
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       visualDensity: VisualDensity.compact,
                     ),
                   ],
@@ -260,7 +273,7 @@ class _AddGiftDialogState extends ConsumerState<AddGiftDialog> {
                       firstDate: DateTime(2000),
                       lastDate: DateTime.now(),
                     );
-                    if (picked != null) {
+                    if (picked != null && mounted) {
                       setState(() => selectedDate = picked);
                     }
                   },
@@ -310,8 +323,10 @@ class _AddGiftDialogState extends ConsumerState<AddGiftDialog> {
                     if (value == null || value.trim().isEmpty) {
                       return 'Please enter a value';
                     }
-                    final parsedValue = double.tryParse(value);
-                    if (parsedValue == null || parsedValue <= 0) {
+                    final parsedValue = double.tryParse(value.trim());
+                    if (parsedValue == null ||
+                        !parsedValue.isFinite ||
+                        parsedValue <= 0) {
                       return 'Please enter a valid positive number';
                     }
                     if (parsedValue > 999999.99) {
@@ -383,32 +398,37 @@ class _DirectionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
 
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        decoration: BoxDecoration(
-          color: isSelected ? color.withAlpha(20) : colors.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isSelected ? color : colors.outlineVariant,
-            width: isSelected ? 2 : 1,
-          ),
-        ),
-        child: Column(
-          children: [
-            Icon(icon, color: isSelected ? color : colors.onSurfaceVariant),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                color: isSelected ? color : colors.onSurfaceVariant,
-                fontSize: 13,
-              ),
+    return Semantics(
+      button: true,
+      selected: isSelected,
+      label: label,
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          decoration: BoxDecoration(
+            color: isSelected ? color.withAlpha(20) : colors.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isSelected ? color : colors.outlineVariant,
+              width: isSelected ? 2 : 1,
             ),
-          ],
+          ),
+          child: Column(
+            children: [
+              Icon(icon, color: isSelected ? color : colors.onSurfaceVariant),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                  color: isSelected ? color : colors.onSurfaceVariant,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

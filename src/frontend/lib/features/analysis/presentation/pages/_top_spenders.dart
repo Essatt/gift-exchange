@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../providers/gift_providers.dart';
+import '../../../../shared/format/currency.dart';
 
 class TopSpenders extends ConsumerWidget {
   const TopSpenders({super.key});
@@ -65,7 +66,7 @@ class TopSpenders extends ConsumerWidget {
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          '\$${entry.totalGiven.toStringAsFixed(2)}',
+                          formatCurrency(entry.totalGiven),
                           style: TextStyle(
                             color: Theme.of(context).colorScheme.primary,
                             fontWeight: FontWeight.bold,
@@ -189,7 +190,7 @@ class LabelBalanceList extends ConsumerWidget {
                               ),
                               const SizedBox(width: 4),
                               Text(
-                                '\$${label.totalGiven.toStringAsFixed(2)}',
+                                formatCurrency(label.totalGiven),
                                 style: TextStyle(
                                   color: colors.error,
                                   fontWeight: FontWeight.w500,
@@ -209,7 +210,7 @@ class LabelBalanceList extends ConsumerWidget {
                               ),
                               const SizedBox(width: 4),
                               Text(
-                                '\$${label.totalReceived.toStringAsFixed(2)}',
+                                formatCurrency(label.totalReceived),
                                 style: TextStyle(
                                   color: colors.tertiary,
                                   fontWeight: FontWeight.w500,
@@ -220,7 +221,7 @@ class LabelBalanceList extends ConsumerWidget {
                           ),
                         ),
                         Text(
-                          'Net: \$${label.netBalance.toStringAsFixed(2)}',
+                          'Net: ${formatCurrency(label.netBalance)}',
                           style: TextStyle(
                             color: balanceColor,
                             fontWeight: FontWeight.bold,

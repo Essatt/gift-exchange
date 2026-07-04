@@ -1,10 +1,10 @@
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import '../../../../models/gift_type.dart';
 import '../../../../providers/gift_providers.dart';
 import '../../../../shared/widgets/timeframe_toggle.dart';
+import '../../../../shared/format/currency.dart';
 import '_top_spenders.dart';
 
 class AnalysisPage extends ConsumerStatefulWidget {
@@ -240,15 +240,19 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                _OverallStatItem(
-                  label: 'Total Given',
-                  value: '\$${totalSpent.toStringAsFixed(2)}',
-                  color: colors.error,
+                Flexible(
+                  child: _OverallStatItem(
+                    label: 'Total Given',
+                    value: formatCurrency(totalSpent),
+                    color: colors.error,
+                  ),
                 ),
-                _OverallStatItem(
-                  label: 'Total Received',
-                  value: '\$${totalReceived.toStringAsFixed(2)}',
-                  color: colors.tertiary,
+                Flexible(
+                  child: _OverallStatItem(
+                    label: 'Total Received',
+                    value: formatCurrency(totalReceived),
+                    color: colors.tertiary,
+                  ),
                 ),
               ],
             ),
@@ -256,16 +260,23 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  'Net Balance',
-                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 18),
+                const Flexible(
+                  child: Text(
+                    'Net Balance',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 18),
+                  ),
                 ),
-                Text(
-                  '\$${netBalance.toStringAsFixed(2)}',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: balanceColor,
-                    fontSize: 20,
+                Flexible(
+                  child: Text(
+                    formatCurrency(netBalance),
+                    textAlign: TextAlign.end,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: balanceColor,
+                      fontSize: 20,
+                    ),
                   ),
                 ),
               ],
@@ -302,6 +313,8 @@ class _OverallStatItem extends StatelessWidget {
         const SizedBox(height: 4),
         Text(
           value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: TextStyle(
             fontWeight: FontWeight.bold,
             color: color,
@@ -321,23 +334,29 @@ class _ViewToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SegmentedButton<String>(
-      segments: const [
-        ButtonSegment(
-          value: 'person',
-          label: Text('By Person'),
-          icon: Icon(Icons.person_outline),
+    return SizedBox(
+      width: double.infinity,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: SegmentedButton<String>(
+          segments: const [
+            ButtonSegment(
+              value: 'person',
+              label: Text('By Person'),
+              icon: Icon(Icons.person_outline),
+            ),
+            ButtonSegment(
+              value: 'label',
+              label: Text('By Label'),
+              icon: Icon(Icons.label_outline),
+            ),
+          ],
+          selected: {selected},
+          onSelectionChanged: (Set<String> newSelection) {
+            onSelectionChanged(newSelection.first);
+          },
         ),
-        ButtonSegment(
-          value: 'label',
-          label: Text('By Label'),
-          icon: Icon(Icons.label_outline),
-        ),
-      ],
-      selected: {selected},
-      onSelectionChanged: (Set<String> newSelection) {
-        onSelectionChanged(newSelection.first);
-      },
+      ),
     );
   }
 }

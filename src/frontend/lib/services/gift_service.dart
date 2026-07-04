@@ -55,42 +55,58 @@ class GiftService {
     _labelCache = null;
   }
 
-  // Undo state
-  Person? _lastDeletedPerson;
-  List<Gift>? _lastDeletedGifts;
-  Gift? _lastDeletedGift;
+  // Undo state — keyed by deleted entity id so rapid consecutive deletes each
+  // retain their own snapshot (a single slot would let "Undo" on one SnackBar
+  // restore the wrong record). Bounded to the most recent few to avoid
+  // unbounded memory growth over a long session.
+  static const int _maxUndoSnapshots = 20;
+  final Map<String, _DeletedPersonSnapshot> _deletedPeople = {};
+  final Map<String, Gift> _deletedGifts = {};
 
-  bool get hasUndoPersonData => _lastDeletedPerson != null;
-  bool get hasUndoGiftData => _lastDeletedGift != null;
+  bool get hasUndoPersonData => _deletedPeople.isNotEmpty;
+  bool get hasUndoGiftData => _deletedGifts.isNotEmpty;
 
-  Future<void> undoDeletePerson() async {
-    final person = _lastDeletedPerson;
-    final gifts = _lastDeletedGifts;
-    if (person == null) return;
-    await _peopleBox.put(person.id, person);
-    if (gifts != null) {
-      await _giftsBox.putAll(
-        {for (final g in gifts) g.id: g},
-      );
+  void _rememberDeletedPerson(String id, _DeletedPersonSnapshot snapshot) {
+    _deletedPeople[id] = snapshot;
+    _trimSnapshots(_deletedPeople);
+  }
+
+  void _rememberDeletedGift(String id, Gift gift) {
+    _deletedGifts[id] = gift;
+    _trimSnapshots(_deletedGifts);
+  }
+
+  void _trimSnapshots(Map<String, Object?> snapshots) {
+    while (snapshots.length > _maxUndoSnapshots) {
+      snapshots.remove(snapshots.keys.first);
     }
-    _lastDeletedPerson = null;
-    _lastDeletedGifts = null;
+  }
+
+  /// Restores a specific deleted person (and their gifts) by id. Safe to call
+  /// after other deletions have occurred; no-op if the snapshot has expired.
+  Future<void> undoDeletePerson(String id) async {
+    final snapshot = _deletedPeople.remove(id);
+    if (snapshot == null) return;
+    await _peopleBox.put(snapshot.person.id, snapshot.person);
+    if (snapshot.gifts.isNotEmpty) {
+      await _giftsBox.putAll({for (final g in snapshot.gifts) g.id: g});
+    }
     _invalidateLabelCache();
   }
 
-  Future<void> undoDeleteGift() async {
-    final gift = _lastDeletedGift;
+  /// Restores a specific deleted gift by id. Safe to call after other
+  /// deletions; no-op if the snapshot has expired.
+  Future<void> undoDeleteGift(String id) async {
+    final gift = _deletedGifts.remove(id);
     if (gift == null) return;
     await _giftsBox.put(gift.id, gift);
     await _touchPerson(gift.personId);
-    _lastDeletedGift = null;
     _invalidateLabelCache();
   }
 
   void clearUndoData() {
-    _lastDeletedPerson = null;
-    _lastDeletedGifts = null;
-    _lastDeletedGift = null;
+    _deletedPeople.clear();
+    _deletedGifts.clear();
   }
 
   // Singleton
@@ -119,9 +135,14 @@ class GiftService {
         .toList();
     final giftKeys = gifts.map((g) => g.id).toList();
 
-    // Store for undo before deleting
-    _lastDeletedPerson = person;
-    _lastDeletedGifts = gifts;
+    // Store for undo before deleting (keyed by id so a later delete doesn't
+    // clobber this snapshot).
+    if (person != null) {
+      _rememberDeletedPerson(
+        id,
+        _DeletedPersonSnapshot(person: person, gifts: gifts),
+      );
+    }
 
     await _giftsBox.deleteAll(giftKeys);
     await _peopleBox.delete(id);
@@ -160,7 +181,9 @@ class GiftService {
 
   Future<void> deleteGift(String id) async {
     final gift = _giftsBox.get(id);
-    _lastDeletedGift = gift;
+    if (gift != null) {
+      _rememberDeletedGift(id, gift);
+    }
     await _giftsBox.delete(id);
     if (gift != null) {
       await _touchPerson(gift.personId);
@@ -286,51 +309,99 @@ class GiftService {
     return const JsonEncoder.withIndent('  ').convert(map);
   }
 
+  /// Highest schema version this build can import.
+  static const int _supportedBackupVersion = 1;
+
+  /// Imports a backup produced by [exportToJson].
+  ///
+  /// The import is additive: records whose id does not already exist are added,
+  /// and a record whose id DOES exist is overwritten with the backup's version
+  /// (last-write-wins by id) — no existing record is deleted. It is staged in
+  /// memory and validated in full BEFORE anything is written, so a malformed
+  /// backup can never leave the database half-imported. Individual malformed
+  /// records are skipped (and counted) rather than aborting the whole import;
+  /// gifts referencing a person that is neither in the backup nor already
+  /// stored are dropped to avoid orphans. Throws [FormatException] only when
+  /// the payload is not a valid backup envelope at all (bad JSON / wrong
+  /// shape / unsupported version).
   Future<String> importFromJson(String json) async {
-    final map = jsonDecode(json) as Map<String, dynamic>;
+    final dynamic decoded;
+    try {
+      decoded = jsonDecode(json);
+    } catch (_) {
+      throw const FormatException('Backup is not valid JSON.');
+    }
+    if (decoded is! Map<String, dynamic>) {
+      throw const FormatException('Backup format is not recognized.');
+    }
+    final map = decoded;
 
-    final peopleList = (map['people'] as List<dynamic>?) ?? [];
-    final giftsList = (map['gifts'] as List<dynamic>?) ?? [];
-    final labelsList = (map['customLabels'] as List<dynamic>?) ?? [];
+    // Absent version → assume the original v1 (which had no version field).
+    // Present-but-non-numeric version → treat as unrecognized, not v1, so a
+    // corrupt/newer envelope can't slip past the compatibility gate.
+    final int version;
+    if (map.containsKey('version')) {
+      final parsed = _asInt(map['version']);
+      if (parsed == null) {
+        throw const FormatException(
+          'Backup version is invalid or unrecognized.',
+        );
+      }
+      version = parsed;
+    } else {
+      version = 1;
+    }
+    if (version > _supportedBackupVersion) {
+      throw FormatException(
+        'This backup was created by a newer version of the app '
+        '(backup v$version, supported v$_supportedBackupVersion). '
+        'Please update the app before importing.',
+      );
+    }
 
-    int importedPeople = 0;
-    int importedGifts = 0;
+    final peopleList = map['people'] is List ? map['people'] as List : const [];
+    final giftsList = map['gifts'] is List ? map['gifts'] as List : const [];
+    final labelsList =
+        map['customLabels'] is List ? map['customLabels'] as List : const [];
+
+    // --- Stage everything in memory first; write nothing until fully parsed ---
+    final stagedPeople = <String, Person>{};
+    final stagedGifts = <String, Gift>{};
+    var skippedPeople = 0;
+    var skippedGifts = 0;
 
     for (final p in peopleList) {
-      final pMap = p as Map<String, dynamic>;
-      final person = Person(
-        id: pMap['id'] as String,
-        name: pMap['name'] as String,
-        relationship: RelationshipType.values.firstWhere(
-          (r) => r.name == (pMap['relationship'] as String?),
-          orElse: () => RelationshipType.friend,
-        ),
-        customRelationship: (pMap['customRelationship'] as String?) ?? '',
-        createdAt: DateTime.parse(pMap['createdAt'] as String),
-        updatedAt: DateTime.parse(pMap['updatedAt'] as String),
-      );
-      await _peopleBox.put(person.id, person);
-      importedPeople++;
+      final person = _tryParsePerson(p);
+      if (person == null) {
+        skippedPeople++;
+        continue;
+      }
+      stagedPeople[person.id] = person;
     }
 
     for (final g in giftsList) {
-      final gMap = g as Map<String, dynamic>;
-      final gift = Gift(
-        id: gMap['id'] as String,
-        personId: gMap['personId'] as String,
-        type: GiftType.values.firstWhere(
-          (r) => r.name == (gMap['type'] as String?),
-          orElse: () => GiftType.given,
-        ),
-        value: (gMap['value'] as num).toDouble(),
-        date: DateTime.parse(gMap['date'] as String),
-        eventType: (gMap['eventType'] as String?) ?? '',
-        description: (gMap['description'] as String?) ?? '',
-        createdAt: DateTime.parse(gMap['createdAt'] as String),
-        updatedAt: DateTime.parse(gMap['updatedAt'] as String),
-      );
-      await _giftsBox.put(gift.id, gift);
-      importedGifts++;
+      final gift = _tryParseGift(g);
+      if (gift == null) {
+        skippedGifts++;
+        continue;
+      }
+      // Drop gifts that would be orphaned — their person is neither in this
+      // backup nor already stored locally.
+      final personExists = stagedPeople.containsKey(gift.personId) ||
+          _peopleBox.containsKey(gift.personId);
+      if (!personExists) {
+        skippedGifts++;
+        continue;
+      }
+      stagedGifts[gift.id] = gift;
+    }
+
+    // --- Commit: all-or-nothing at the field level already guaranteed above ---
+    if (stagedPeople.isNotEmpty) {
+      await _peopleBox.putAll(stagedPeople);
+    }
+    if (stagedGifts.isNotEmpty) {
+      await _giftsBox.putAll(stagedGifts);
     }
 
     for (final label in labelsList) {
@@ -340,6 +411,104 @@ class GiftService {
     }
 
     _invalidateLabelCache();
-    return 'Imported $importedPeople people and $importedGifts gifts';
+
+    final parts = <String>[
+      'Imported ${stagedPeople.length} people and ${stagedGifts.length} gifts',
+    ];
+    final skipped = skippedPeople + skippedGifts;
+    if (skipped > 0) {
+      parts.add('skipped $skipped invalid record${skipped == 1 ? '' : 's'}');
+    }
+    return parts.join(' — ');
   }
+
+  Person? _tryParsePerson(dynamic raw) {
+    if (raw is! Map) return null;
+    final map = raw.map((k, v) => MapEntry(k.toString(), v));
+    final id = _asNonEmptyString(map['id']);
+    final name = _asNonEmptyString(map['name']);
+    final createdAt = _asDate(map['createdAt']);
+    final updatedAt = _asDate(map['updatedAt']);
+    if (id == null || name == null || createdAt == null || updatedAt == null) {
+      return null;
+    }
+    return Person(
+      id: id,
+      name: name,
+      relationship: RelationshipType.values.firstWhere(
+        (r) => r.name == _asStringOrNull(map['relationship']),
+        orElse: () => RelationshipType.friend,
+      ),
+      customRelationship: _asStringOrNull(map['customRelationship']) ?? '',
+      createdAt: createdAt,
+      updatedAt: updatedAt,
+    );
+  }
+
+  Gift? _tryParseGift(dynamic raw) {
+    if (raw is! Map) return null;
+    final map = raw.map((k, v) => MapEntry(k.toString(), v));
+    final id = _asNonEmptyString(map['id']);
+    final personId = _asNonEmptyString(map['personId']);
+    final value = _asPositiveFiniteDouble(map['value']);
+    final date = _asDate(map['date']);
+    final createdAt = _asDate(map['createdAt']);
+    final updatedAt = _asDate(map['updatedAt']);
+    if (id == null ||
+        personId == null ||
+        value == null ||
+        date == null ||
+        createdAt == null ||
+        updatedAt == null) {
+      return null;
+    }
+    return Gift(
+      id: id,
+      personId: personId,
+      type: GiftType.values.firstWhere(
+        (r) => r.name == _asStringOrNull(map['type']),
+        orElse: () => GiftType.given,
+      ),
+      value: value,
+      date: date,
+      eventType: _asStringOrNull(map['eventType']) ?? '',
+      description: _asStringOrNull(map['description']) ?? '',
+      createdAt: createdAt,
+      updatedAt: updatedAt,
+    );
+  }
+
+  static int? _asInt(dynamic v) => v is int ? v : (v is num ? v.toInt() : null);
+
+  static String? _asNonEmptyString(dynamic v) {
+    if (v is! String) return null;
+    return v.isEmpty ? null : v;
+  }
+
+  /// Returns [v] if it is a String, else null — never throws on a non-String
+  /// value (unlike a raw `as String?` cast, which throws a TypeError on e.g.
+  /// a JSON number/bool/object). Used for OPTIONAL string fields so one
+  /// malformed field skips the record instead of aborting the whole import.
+  static String? _asStringOrNull(dynamic v) => v is String ? v : null;
+
+  static DateTime? _asDate(dynamic v) {
+    if (v is! String) return null;
+    return DateTime.tryParse(v);
+  }
+
+  static double? _asPositiveFiniteDouble(dynamic v) {
+    final double? d = v is num
+        ? v.toDouble()
+        : (v is String ? double.tryParse(v) : null);
+    if (d == null || !d.isFinite || d <= 0) return null;
+    return d;
+  }
+}
+
+/// Snapshot of a deleted person plus their gifts, retained for undo.
+class _DeletedPersonSnapshot {
+  final Person person;
+  final List<Gift> gifts;
+
+  const _DeletedPersonSnapshot({required this.person, required this.gifts});
 }

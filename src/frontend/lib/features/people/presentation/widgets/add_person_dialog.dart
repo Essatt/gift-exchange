@@ -154,7 +154,10 @@ class _AddPersonDialogState extends ConsumerState<AddPersonDialog> {
                   textCapitalization: TextCapitalization.words,
                   autofocus: !_isEditing,
                   validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
+                    // Validate the SANITIZED name so control-char-only input
+                    // (which sanitizes to empty) is rejected, not silently
+                    // saved as a blank name.
+                    if (value == null || _sanitizeName(value).isEmpty) {
                       return 'Please enter a name';
                     }
                     return null;
@@ -198,7 +201,6 @@ class _AddPersonDialogState extends ConsumerState<AddPersonDialog> {
                       },
                       selectedColor: colors.secondaryContainer,
                       showCheckmark: false,
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       visualDensity: VisualDensity.compact,
                     );
                   }).toList(),

@@ -57,23 +57,34 @@ class PeoplePage extends ConsumerWidget {
                       );
                       if (confirmed) {
                         final service = ref.read(giftServiceProvider);
-                        await service.deletePerson(person.id);
-                        ref.read(refreshSignalProvider.notifier).state++;
-                        messenger.showSnackBar(
-                          SnackBar(
-                            content: Text('${person.name} deleted'),
-                            duration: const Duration(seconds: 5),
-                            action: SnackBarAction(
-                              label: 'Undo',
-                              onPressed: () async {
-                                await service.undoDeletePerson();
-                                ref
-                                    .read(refreshSignalProvider.notifier)
-                                    .state++;
-                              },
+                        final deletedId = person.id;
+                        try {
+                          await service.deletePerson(deletedId);
+                          ref.read(refreshSignalProvider.notifier).state++;
+                          messenger.hideCurrentSnackBar();
+                          messenger.showSnackBar(
+                            SnackBar(
+                              content: Text('${person.name} deleted'),
+                              duration: const Duration(seconds: 5),
+                              action: SnackBarAction(
+                                label: 'Undo',
+                                onPressed: () async {
+                                  await service.undoDeletePerson(deletedId);
+                                  ref
+                                      .read(refreshSignalProvider.notifier)
+                                      .state++;
+                                },
+                              ),
                             ),
-                          ),
-                        );
+                          );
+                        } catch (e) {
+                          messenger.hideCurrentSnackBar();
+                          messenger.showSnackBar(
+                            SnackBar(
+                              content: Text('Failed to delete: $e'),
+                            ),
+                          );
+                        }
                       }
                     },
                   );
@@ -154,6 +165,8 @@ class _PersonCard extends StatelessWidget {
         ),
         title: Text(
           person.name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: const TextStyle(fontWeight: FontWeight.w600),
         ),
         subtitle: Text(

@@ -7,6 +7,7 @@ import '../../../../models/person.dart';
 import '../../../../shared/widgets/confirm_delete_dialog.dart';
 import '../../../../providers/gift_providers.dart';
 import '../../../people/presentation/widgets/add_gift_dialog.dart';
+import '../../../../shared/format/currency.dart';
 
 class GiftExchangePage extends ConsumerWidget {
   const GiftExchangePage({super.key});
@@ -51,19 +52,22 @@ class GiftExchangePage extends ConsumerWidget {
                 content: 'Are you sure you want to delete this gift?',
               );
               if (confirmed) {
+                final service = ref.read(giftServiceProvider);
+                final deletedId = gift.id;
                 try {
-                  final service = ref.read(giftServiceProvider);
-                  await service.deleteGift(gift.id);
+                  await service.deleteGift(deletedId);
                   ref.read(refreshSignalProvider.notifier).state++;
                   if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
+                    final messenger = ScaffoldMessenger.of(context);
+                    messenger.hideCurrentSnackBar();
+                    messenger.showSnackBar(
                       SnackBar(
                         content: const Text('Gift deleted'),
                         duration: const Duration(seconds: 5),
                         action: SnackBarAction(
                           label: 'Undo',
                           onPressed: () async {
-                            await service.undoDeleteGift();
+                            await service.undoDeleteGift(deletedId);
                             ref
                                 .read(refreshSignalProvider.notifier)
                                 .state++;
@@ -160,6 +164,8 @@ class _GiftCard extends StatelessWidget {
                   children: [
                     Text(
                       person?.name ?? 'Unknown',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
                     Text(
@@ -173,7 +179,7 @@ class _GiftCard extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      '${gift.eventType} \u2022 ${DateFormat.yMMMd().format(gift.date)}',
+                      '${gift.eventType} • ${DateFormat.yMMMd().format(gift.date)}',
                       style: TextStyle(
                         color: colors.onSurfaceVariant,
                         fontSize: 11,
@@ -182,26 +188,30 @@ class _GiftCard extends StatelessWidget {
                   ],
                 ),
               ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    '\$${gift.value.toStringAsFixed(2)}',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: color,
-                      fontSize: 16,
+              Flexible(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      formatCurrency(gift.value),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: color,
+                        fontSize: 16,
+                      ),
                     ),
-                  ),
-                  Text(
-                    isGiven ? 'Given' : 'Received',
-                    style: TextStyle(
-                      color: color,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500,
+                    Text(
+                      isGiven ? 'Given' : 'Received',
+                      style: TextStyle(
+                        color: color,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
               const SizedBox(width: 4),
               PopupMenuButton<String>(
@@ -209,8 +219,8 @@ class _GiftCard extends StatelessWidget {
                   if (value == 'edit') onEdit();
                   if (value == 'delete') onDelete();
                 },
-                padding: EdgeInsets.zero,
-                iconSize: 20,
+                iconSize: 24,
+                tooltip: 'Gift options',
                 itemBuilder: (context) => [
                   const PopupMenuItem(
                     value: 'edit',

@@ -12,28 +12,34 @@ class TimeframeToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SegmentedButton<String>(
-      segments: const [
-        ButtonSegment(
-          value: 'overall',
-          label: Text('All'),
-          icon: Icon(Icons.all_inclusive),
+    return SizedBox(
+      width: double.infinity,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: SegmentedButton<String>(
+          segments: const [
+            ButtonSegment(
+              value: 'overall',
+              label: Text('All'),
+              icon: Icon(Icons.all_inclusive),
+            ),
+            ButtonSegment(
+              value: 'yearly',
+              label: Text('Year'),
+              icon: Icon(Icons.calendar_today),
+            ),
+            ButtonSegment(
+              value: 'monthly',
+              label: Text('Month'),
+              icon: Icon(Icons.calendar_month),
+            ),
+          ],
+          selected: {selected},
+          onSelectionChanged: (Set<String> newSelection) {
+            onSelectionChanged(newSelection.first);
+          },
         ),
-        ButtonSegment(
-          value: 'yearly',
-          label: Text('Year'),
-          icon: Icon(Icons.calendar_today),
-        ),
-        ButtonSegment(
-          value: 'monthly',
-          label: Text('Month'),
-          icon: Icon(Icons.calendar_month),
-        ),
-      ],
-      selected: {selected},
-      onSelectionChanged: (Set<String> newSelection) {
-        onSelectionChanged(newSelection.first);
-      },
+      ),
     );
   }
 }

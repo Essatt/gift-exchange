@@ -155,9 +155,15 @@ class _PersonDetailPageState extends ConsumerState<PersonDetailPage> {
                         );
                         if (confirmed) {
                           final service = ref.read(giftServiceProvider);
+                          // Capture the notifier up front: the Undo SnackBar is
+                          // owned by the root messenger and can outlive this
+                          // route, so touching `ref` inside the callback after
+                          // the page is popped would throw.
+                          final refresh =
+                              ref.read(refreshSignalProvider.notifier);
                           try {
                             await service.deleteGift(giftId);
-                            ref.read(refreshSignalProvider.notifier).state++;
+                            refresh.state++;
                             if (context.mounted) {
                               final messenger =
                                   ScaffoldMessenger.of(context);
@@ -169,10 +175,13 @@ class _PersonDetailPageState extends ConsumerState<PersonDetailPage> {
                                   action: SnackBarAction(
                                     label: 'Undo',
                                     onPressed: () async {
-                                      await service.undoDeleteGift(giftId);
-                                      ref
-                                          .read(refreshSignalProvider.notifier)
-                                          .state++;
+                                      try {
+                                        await service.undoDeleteGift(giftId);
+                                        refresh.state++;
+                                      } catch (_) {
+                                        // Best-effort undo; nothing more we can
+                                        // safely do if the page is gone.
+                                      }
                                     },
                                   ),
                                 ),

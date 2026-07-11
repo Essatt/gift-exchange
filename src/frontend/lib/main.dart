@@ -15,7 +15,15 @@ import 'features/gifts/presentation/pages/gift_exchange_page.dart';
 import 'features/analysis/presentation/pages/analysis_page.dart';
 
 Future<List<int>> _getEncryptionKey() async {
-  const storage = FlutterSecureStorage();
+  // Device-bound so the key is never synced/restored to another device, which
+  // would leave the local encrypted Hive boxes undecryptable. Android auto-backup
+  // is also disabled in the manifest so box files and key stay in sync.
+  const storage = FlutterSecureStorage(
+    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+    iOptions: IOSOptions(
+      accessibility: KeychainAccessibility.first_unlock_this_device,
+    ),
+  );
   const key = 'hive_encryption_key';
   final existing = await storage.read(key: key);
   if (existing != null) {
@@ -205,10 +213,10 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
 
-  final List<Widget> _pages = const [
-    PeoplePage(),
-    GiftExchangePage(),
-    AnalysisPage(),
+  late final List<Widget> _pages = [
+    const PeoplePage(),
+    GiftExchangePage(onGoToPeople: () => _onItemTapped(0)),
+    const AnalysisPage(),
   ];
 
   void _onItemTapped(int index) {

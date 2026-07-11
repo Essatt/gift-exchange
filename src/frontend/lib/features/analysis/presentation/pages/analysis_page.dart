@@ -79,15 +79,20 @@ class _AnalysisPageState extends ConsumerState<AnalysisPage> {
   }
 
   Future<void> _exportData(BuildContext context, WidgetRef ref) async {
-    final service = ref.read(giftServiceProvider);
-    final json = service.exportToJson();
-    await Clipboard.setData(ClipboardData(text: json));
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final service = ref.read(giftServiceProvider);
+      final json = service.exportToJson();
+      await Clipboard.setData(ClipboardData(text: json));
+      messenger.showSnackBar(
         const SnackBar(
           content: Text('Backup copied to clipboard. Save it somewhere safe!'),
           duration: Duration(seconds: 3),
         ),
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Export failed. Please try again.')),
       );
     }
   }

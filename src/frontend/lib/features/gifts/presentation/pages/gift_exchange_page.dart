@@ -10,7 +10,8 @@ import '../../../people/presentation/widgets/add_gift_dialog.dart';
 import '../../../../shared/format/currency.dart';
 
 class GiftExchangePage extends ConsumerWidget {
-  const GiftExchangePage({super.key});
+  final VoidCallback? onGoToPeople;
+  const GiftExchangePage({super.key, this.onGoToPeople});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -67,10 +68,12 @@ class GiftExchangePage extends ConsumerWidget {
                         action: SnackBarAction(
                           label: 'Undo',
                           onPressed: () async {
-                            await service.undoDeleteGift(deletedId);
-                            ref
-                                .read(refreshSignalProvider.notifier)
-                                .state++;
+                            try {
+                              await service.undoDeleteGift(deletedId);
+                              ref
+                                  .read(refreshSignalProvider.notifier)
+                                  .state++;
+                            } catch (_) {}
                           },
                         ),
                       ),
@@ -112,6 +115,14 @@ class GiftExchangePage extends ConsumerWidget {
               context,
             ).textTheme.bodyMedium?.copyWith(color: colors.onSurfaceVariant),
           ),
+          if (onGoToPeople != null) ...[
+            const SizedBox(height: 24),
+            FilledButton.tonalIcon(
+              onPressed: onGoToPeople,
+              icon: const Icon(Icons.people_alt_outlined),
+              label: const Text('Add People First'),
+            ),
+          ],
         ],
       ),
     );

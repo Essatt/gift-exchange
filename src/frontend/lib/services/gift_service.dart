@@ -258,22 +258,6 @@ class GiftService {
     return input.replaceAll(RegExp(r'[\x00-\x1F\x7F]'), '').trim();
   }
 
-  // --- Query Methods ---
-
-  List<String> getAllEventTypes() {
-    return _giftsBox.values.map((gift) => gift.eventType).toSet().toList()
-      ..sort();
-  }
-
-  Map<String, List<Gift>> getGiftsByEvent(String personId) {
-    final gifts = getGiftsByPersonId(personId);
-    final grouped = <String, List<Gift>>{};
-    for (final gift in gifts) {
-      grouped.putIfAbsent(gift.eventType, () => []).add(gift);
-    }
-    return grouped;
-  }
-
   // --- Backup / Restore ---
 
   String exportToJson() {

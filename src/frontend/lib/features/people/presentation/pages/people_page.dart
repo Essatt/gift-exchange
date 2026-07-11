@@ -69,10 +69,12 @@ class PeoplePage extends ConsumerWidget {
                               action: SnackBarAction(
                                 label: 'Undo',
                                 onPressed: () async {
-                                  await service.undoDeletePerson(deletedId);
-                                  ref
-                                      .read(refreshSignalProvider.notifier)
-                                      .state++;
+                                  try {
+                                    await service.undoDeletePerson(deletedId);
+                                    ref
+                                        .read(refreshSignalProvider.notifier)
+                                        .state++;
+                                  } catch (_) {}
                                 },
                               ),
                             ),

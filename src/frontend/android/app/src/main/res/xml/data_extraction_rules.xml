@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Gift Exchange stores all data locally in AES-encrypted Hive boxes whose key
+  lives in the Android keystore (flutter_secure_storage). Cloud backup / device
+  transfer must be disabled: restoring the encrypted box files without the
+  matching keystore key yields undecryptable data and permanent data loss.
+  Users migrate devices via the in-app manual export/import instead.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" />
+    </device-transfer>
+</data-extraction-rules>

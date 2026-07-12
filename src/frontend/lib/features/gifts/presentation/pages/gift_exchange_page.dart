@@ -37,12 +37,12 @@ class GiftExchangePage extends ConsumerWidget {
             gift: gift,
             person: person,
             onEdit: () async {
-              final result = await showDialog<bool>(
+              final result = await showDialog<String>(
                 context: context,
                 builder: (_) =>
                     AddGiftDialog(personId: gift.personId, existingGift: gift),
               );
-              if (result == true) {
+              if (result != null) {
                 ref.read(refreshSignalProvider.notifier).state++;
               }
             },

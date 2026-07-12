@@ -181,12 +181,10 @@ void main() {
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
 
-    // Back on the detail page the gift is grouped under a collapsible event
-    // card showing "1 gift". Confirm the group appeared, then expand it and
-    // verify the gift description is shown.
+    // Back on the detail page the gift is grouped under an event card showing
+    // "1 gift". The group auto-expands on add, so the description is visible
+    // immediately without tapping to expand.
     expect(find.text('1 gift'), findsOneWidget);
-    await tester.tap(find.text('1 gift'));
-    await tester.pumpAndSettle();
     expect(find.text('Watch'), findsOneWidget);
   });
 

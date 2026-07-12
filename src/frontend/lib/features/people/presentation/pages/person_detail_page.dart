@@ -52,13 +52,15 @@ class _PersonDetailPageState extends ConsumerState<PersonDetailPage> {
   }
 
   Future<void> _editGift(Gift gift) async {
-    final result = await showDialog<bool>(
+    final result = await showDialog<String>(
       context: context,
       builder: (_) =>
           AddGiftDialog(personId: widget.personId, existingGift: gift),
     );
-    if (result == true) {
+    if (result != null) {
       ref.read(refreshSignalProvider.notifier).state++;
+      // Keep the edited gift's (possibly changed) event group expanded.
+      setState(() => _expandedEvent = result);
     }
   }
 
@@ -207,11 +209,15 @@ class _PersonDetailPageState extends ConsumerState<PersonDetailPage> {
         ),
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          showDialog(
+        onPressed: () async {
+          final result = await showDialog<String>(
             context: context,
             builder: (_) => AddGiftDialog(personId: widget.personId),
           );
+          if (result != null && mounted) {
+            // Auto-expand the new gift's event group so it's visible at once.
+            setState(() => _expandedEvent = result);
+          }
         },
         child: const Icon(Icons.add),
       ),

@@ -104,7 +104,8 @@ class _AddGiftDialogState extends ConsumerState<AddGiftDialog> {
       ref.read(refreshSignalProvider.notifier).state++;
 
       if (mounted) {
-        Navigator.of(context).pop(true);
+        // Return the saved event type so the caller can auto-expand its group.
+        Navigator.of(context).pop(eventType);
       }
     } catch (e) {
       if (mounted) {

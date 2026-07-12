@@ -61,7 +61,7 @@ void main() async {
     await Hive.openBox<Gift>('gifts', encryptionCipher: cipher);
     await Hive.openBox<String>('custom_event_labels', encryptionCipher: cipher);
 
-    runApp(const ProviderScope(child: GiftExchangeApp()));
+    runApp(const ProviderScopedApp());
   } catch (e) {
     runApp(
       const MaterialApp(
@@ -78,6 +78,17 @@ void main() async {
         ),
       ),
     );
+  }
+}
+
+/// Root widget wrapping the app in a [ProviderScope]. Extracted so integration
+/// tests can pump the exact production widget tree.
+class ProviderScopedApp extends StatelessWidget {
+  const ProviderScopedApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const ProviderScope(child: GiftExchangeApp());
   }
 }
 

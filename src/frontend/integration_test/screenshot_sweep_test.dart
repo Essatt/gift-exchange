@@ -1,11 +1,11 @@
-// Seeds the app with realistic sample data and captures screenshots of every
-// main screen for visual/polish review. NOT a correctness gate — it exists to
-// produce eyeballable images of the populated app.
+// Seeds the app with realistic sample data and captures marketing screenshots
+// of every main screen, in both light and dark mode. NOT a correctness gate.
 //
-// Run with:
-//   flutter test integration_test/screenshot_sweep_test.dart -d <device-id>
+// Run for a specific mode:
+//   BRIGHTNESS=dark flutter test integration_test/screenshot_sweep_test.dart -d <id>
+//   BRIGHTNESS=light flutter test integration_test/screenshot_sweep_test.dart -d <id>
 //
-// Screenshots are written to the test's build dir; their paths print at the end.
+// Screenshots are written to /tmp/gx-screenshots-<mode>/.
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -21,7 +21,8 @@ import 'package:gift_exchange/models/gift_type.dart';
 import 'package:gift_exchange/main.dart';
 import 'package:gift_exchange/services/gift_service.dart';
 
-const _shotDir = '/tmp/gx-screenshots';
+final _mode = Platform.environment['BRIGHTNESS'] == 'dark' ? 'dark' : 'light';
+final _shotDir = '/tmp/gx-screenshots-$_mode';
 
 Future<void> _shot(IntegrationTestWidgetsFlutterBinding binding, String name) async {
   final bytes = await binding.takeScreenshot(name);
@@ -134,7 +135,6 @@ void main() {
     // 2. Person detail (Mom) — expand the top event group
     await tester.tap(find.text('Mom'));
     await tester.pumpAndSettle();
-    // Expand the largest-volume group if collapsed.
     final expandFinder = find.byIcon(Icons.expand_more);
     if (expandFinder.evaluate().isNotEmpty) {
       await tester.tap(expandFinder.first);
@@ -142,19 +142,32 @@ void main() {
     }
     await _shot(binding, '02-person-detail.png');
 
-    // Pop back to the People list so the bottom nav bar is available.
+    // 3. Add-gift dialog open (shows the input flow)
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+    await _shot(binding, '03-add-gift.png');
+    // Close the dialog.
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+
+    // Pop back to People so the bottom nav bar is available.
     tester.state<NavigatorState>(find.byType(Navigator).first).pop();
     await tester.pumpAndSettle();
 
-    // 3. History
+    // 4. History
     await tester.tap(find.widgetWithText(NavigationDestination, 'History'));
     await tester.pumpAndSettle();
-    await _shot(binding, '03-history.png');
+    await _shot(binding, '04-history.png');
 
-    // 4. Analysis
+    // 5. Analysis
     await tester.tap(find.widgetWithText(NavigationDestination, 'Analysis'));
     await tester.pumpAndSettle();
-    await _shot(binding, '04-analysis.png');
+    await _shot(binding, '05-analysis.png');
+
+    // 6. Back to People for a final People shot (good hero image)
+    await tester.tap(find.widgetWithText(NavigationDestination, 'People'));
+    await tester.pumpAndSettle();
+    await _shot(binding, '06-people.png');
 
     debugPrint('SCREENSHOTS_WRITTEN_TO=$_shotDir');
     await Hive.close();

@@ -493,13 +493,106 @@
       .sheet { width: 100%; max-height: 92vh; padding: 22px 18px max(22px, env(safe-area-inset-bottom)); border-radius: 24px 24px 0 0; }
       .form-row { grid-template-columns: 1fr; }
     }
+
+    /* The artifact is intentionally a phone prototype first. The desktop
+       viewport only provides a neutral presentation surface around it. */
+    .prototype-shell { width: 100%; padding: 28px 0 42px; }
+    .prototype-bar { width: min(390px, calc(100vw - 32px)); margin: 0 auto 14px; }
+    .prototype-bar span { display: inline; }
+    .app-frame {
+      position: relative;
+      display: block;
+      width: min(390px, calc(100vw - 32px));
+      height: min(844px, calc(100vh - 94px));
+      min-height: 720px;
+      margin: 0 auto;
+      overflow: hidden;
+      border: 9px solid #2c2930;
+      border-radius: 42px;
+      background: var(--canvas);
+      box-shadow: 0 34px 90px rgba(41, 34, 28, .28), 0 0 0 1px rgba(255,255,255,.45);
+    }
+    .app-frame::before {
+      position: absolute;
+      top: 0;
+      left: 50%;
+      z-index: 30;
+      width: 104px;
+      height: 22px;
+      border-radius: 0 0 16px 16px;
+      background: #2c2930;
+      content: "";
+      transform: translateX(-50%);
+    }
+    .side-nav { display: none; }
+    .app-content { height: 100%; overflow-y: auto; padding: 34px 16px 96px; scrollbar-width: none; }
+    .app-content::-webkit-scrollbar { display: none; }
+    .content-header { display: block; margin-bottom: 22px; }
+    .content-header .header-actions { justify-content: flex-start; margin-top: 17px; }
+    .content-header .header-actions .button.primary { flex: 1; }
+    h1 { font-size: 31px; }
+    .lede { font-size: 14px; }
+    .hero-grid, .people-grid, .balance-grid, .backup-grid, .analysis-layout { grid-template-columns: 1fr; }
+    .welcome-card { min-height: 225px; padding: 23px; }
+    .summary-card { min-height: 172px; }
+    .people-grid { gap: 10px; }
+    .section-heading { margin-top: 24px; }
+    .panel.pad { padding: 18px; }
+    .activity-row { grid-template-columns: 40px minmax(0,1fr) auto; }
+    .activity-row .status-badge { display: none; }
+    .exchange-row { grid-template-columns: 40px minmax(0,1fr) auto; gap: 11px; }
+    .exchange-row .status-badge { grid-column: 2; grid-row: 2; justify-self: start; }
+    .exchange-row .exchange-amount { grid-column: 3; grid-row: 1 / span 2; }
+    .exchange-row .row-menu { display: none; }
+    .person-hero { align-items: flex-start; }
+    .person-hero .header-actions { display: flex; flex-direction: column; align-items: stretch; }
+    .person-hero .header-actions .button { width: 100%; }
+    .balance-main .amount { font-size: 40px; }
+    .control-line { align-items: flex-start; flex-direction: column; }
+    .segmented { width: 100%; }
+    .segment { flex: 1; }
+    .event-toggle { grid-template-columns: 40px minmax(0,1fr) 30px; }
+    .event-total { display: none; }
+    .event-body { padding-left: 15px; }
+    .gift-line { grid-template-columns: minmax(0,1fr) auto; }
+    .gift-line .status-badge { grid-row: 2; justify-self: start; }
+    .gift-line .amount { grid-row: 1 / span 2; }
+    .gift-line .actions { display: none; }
+    .bottom-nav {
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      left: 0;
+      z-index: 10;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 3px;
+      padding: 8px 7px 8px;
+      border-top: 1px solid var(--line);
+      background: rgba(255,253,248,.95);
+      backdrop-filter: blur(14px);
+    }
+    .bottom-nav .nav-btn { display: grid; min-height: 51px; place-items: center; gap: 3px; padding: 4px; border-radius: 12px; text-align: center; font-size: 10px; }
+    .bottom-nav .nav-btn svg { width: 18px; height: 18px; }
+    .bottom-nav .nav-btn.log { color: #fff; background: var(--primary); }
+    .bottom-nav .nav-btn.log svg { width: 20px; height: 20px; }
+    .overlay { align-items: flex-end; justify-content: center; padding: 0; }
+    .sheet { width: min(390px, 100%); max-height: 92vh; border-radius: 24px 24px 0 0; }
+    .form-row { grid-template-columns: 1fr; }
+    @media (max-width: 430px) {
+      .prototype-shell { padding: 0; }
+      .prototype-bar { width: auto; margin: 0; padding: 12px 18px 8px; }
+      .prototype-bar span { display: none; }
+      .app-frame { width: 100%; height: 100vh; min-height: 100vh; border: 0; border-radius: 0; box-shadow: none; }
+      .app-frame::before { display: none; }
+    }
   </style>
 </head>
 <body>
   <div class="prototype-shell">
     <div class="prototype-bar">
       <strong>Gift Exchange / redesign study</strong>
-      <span>Clickable HTML prototype · audit-driven flow pass</span>
+      <span>Mobile app prototype · 390 × 844 · touch-first</span>
     </div>
 
     <div class="app-frame">
@@ -607,14 +700,13 @@
           <section class="panel pad backup-history"><div class="section-heading" style="margin-top:0"><div><h2>Backup history</h2><p>Clear status beats a hidden menu item.</p></div></div><div class="history-row"><span><strong>Last export</strong><br /><span class="muted small">Today · 10:42 AM</span></span><span class="status-badge received"><span data-icon="check"></span>Saved to clipboard</span></div><div class="history-row"><span><strong>Last import</strong><br /><span class="muted small">No imports yet</span></span><span class="muted small">Ready when you are</span></div></section>
         </section>
       </main>
+      <nav class="bottom-nav" aria-label="Mobile navigation">
+        <button class="nav-btn active" data-nav="people"><span data-icon="people"></span><span>People</span></button>
+        <button class="nav-btn" data-nav="exchanges"><span data-icon="exchange"></span><span>Exchanges</span></button>
+        <button class="nav-btn log" data-open-add><span data-icon="plus"></span><span>Log gift</span></button>
+        <button class="nav-btn" data-nav="analysis"><span data-icon="chart"></span><span>Analysis</span></button>
+      </nav>
     </div>
-
-    <nav class="bottom-nav" aria-label="Mobile navigation">
-      <button class="nav-btn active" data-nav="people"><span data-icon="people"></span><span>People</span></button>
-      <button class="nav-btn" data-nav="exchanges"><span data-icon="exchange"></span><span>Exchanges</span></button>
-      <button class="nav-btn log" data-open-add><span data-icon="plus"></span><span>Log gift</span></button>
-      <button class="nav-btn" data-nav="analysis"><span data-icon="chart"></span><span>Analysis</span></button>
-    </nav>
   </div>
 
   <div class="overlay" id="add-overlay" role="dialog" aria-modal="true" aria-labelledby="add-title">

@@ -2,7 +2,7 @@
 
 Date: 2026-09-21  
 Scope: current Flutter UI and interaction flows in `src/frontend/lib`  
-Output: [interactive HTML redesign](../../design/gift-exchange-redesign.html)
+Output: [interactive mobile HTML app prototype](../../design/gift-exchange-redesign.html)
 
 ## Executive finding
 
@@ -58,7 +58,7 @@ The redesign uses a quiet, warm “gift journal” direction: paper-like surface
 
 ## HTML prototype coverage
 
-The prototype at `design/gift-exchange-redesign.html` covers the screens and states that the audit identified as redesign candidates:
+The prototype at `design/gift-exchange-redesign.html` is a phone-sized, touch-first app shell rather than a responsive web dashboard. It uses a 390×844 device canvas on larger screens and becomes edge-to-edge on narrow screens. It covers the screens and states that the audit identified as redesign candidates:
 
 1. **People:** first-use onboarding state, person list, relationship context, recent activity, and primary `Log gift` action.
 2. **Exchanges:** searchable/filterable timeline, clear given/received badges, grouped dates, and visible actions.

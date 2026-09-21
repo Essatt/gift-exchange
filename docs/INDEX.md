@@ -2,7 +2,7 @@
 
 📥 **Inbox:** unactioned items in [../inbox/inbox.md](../inbox/inbox.md)
 
-Last Updated: 2026-07-04
+Last Updated: 2026-09-21
 
 ## Project
 
@@ -20,4 +20,9 @@ Last Updated: 2026-07-04
 ## Sweeps
 
 - [2026-05-03 Production Readiness Sweep](sweeps/sweep-production-readiness-2026-05-03.md) — 35 issues found, 6 critical, pre-fix audit
+- [2026-09-21 Design Sweep](sweeps/sweep-design-2026-09-21.md) — cross-skill design audit and HTML redesign decisions
 - [2026-07-04 Cross-sweep UX Hardening](handoffs/2026-07-04-cross-sweep-ux-hardening.md) — 6-model cross-sweep: import-safety, undo state-race, validation, responsive/a11y fixes; 34 tests
+
+## Design artifacts
+
+- [Gift Exchange redesign prototype](../design/gift-exchange-redesign.html) — clickable HTML redesign for the audited UI and flows
